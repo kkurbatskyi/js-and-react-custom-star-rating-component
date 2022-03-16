@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/picovoice_screening_questions/Q2JS/q2-all-react/static/css/main.0a1a0d5a.css",
+    "main.js": "/picovoice_screening_questions/Q2JS/q2-all-react/static/js/main.9b0f1d8a.js",
+    "index.html": "/picovoice_screening_questions/Q2JS/q2-all-react/index.html",
+    "main.0a1a0d5a.css.map": "/picovoice_screening_questions/Q2JS/q2-all-react/static/css/main.0a1a0d5a.css.map",
+    "main.9b0f1d8a.js.map": "/picovoice_screening_questions/Q2JS/q2-all-react/static/js/main.9b0f1d8a.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.0a1a0d5a.css",
+    "static/js/main.9b0f1d8a.js"
+  ]
+}
