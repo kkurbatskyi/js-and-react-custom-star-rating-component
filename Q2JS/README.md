@@ -1,9 +1,9 @@
 The three folders here contain the source code for the three ways I made Star Rating component: 
 
-## React App.
-#Webpage
+## React App
+# Webpage
 https://kkurbatskyi.github.io/q2-vanilla-js/
-#Content: 
+# Content: 
 ```
 public----\
           index.html
@@ -20,7 +20,7 @@ In *src* `components` folder contains the two components: `Rating`, which is the
 App.js is the "parent component" of the app, it contains all the components in it.
 index.js is the "main" JS file of the app, it renders the App component.
 
-#Run
+# Run
 Since it is a React App, to launch you need to run 
 ```
 npm i
