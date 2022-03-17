@@ -4,7 +4,7 @@ The three folders here contain the source code for the three ways I made Star Ra
 
 # React App
 ### Webpage
-          [https://kkurbatskyi.github.io/q2-all-react/](https://kkurbatskyi.github.io/q2-all-react/)
+[https://kkurbatskyi.github.io/q2-all-react/](https://kkurbatskyi.github.io/q2-all-react/)
 ### Content: 
 ```
 public----\
@@ -32,7 +32,7 @@ First - to install dependencies, second - to run.
 
 # Non-app website with React components used
 ### Webpage
-          [https://kkurbatskyi.github.io/q2-minimum-react/](https://kkurbatskyi.github.io/q2-minimum-react/)
+[https://kkurbatskyi.github.io/q2-minimum-react/](https://kkurbatskyi.github.io/q2-minimum-react/)
 ### Content: 
 ```
 script-------\
@@ -54,7 +54,7 @@ Due to `type="model"` in the last `<script>` tag, the website cannot be run as a
 
 # Website with plain JS
 ### Webpage
-          [https://kkurbatskyi.github.io/q2-vanilla-js/](https://kkurbatskyi.github.io/q2-vanilla-js/)
+[https://kkurbatskyi.github.io/q2-vanilla-js/](https://kkurbatskyi.github.io/q2-vanilla-js/)
 ### Content: 
 ```
 script-------\
