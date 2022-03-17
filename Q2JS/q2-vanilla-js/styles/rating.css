@@ -1,0 +1,20 @@
+.rating{
+    cursor: pointer;
+    width: fit-content;
+}
+
+.rating span{
+    font-size: 2em;
+}
+
+.rating span.hovered{
+    color: gray;
+}
+
+.rating span.rated{
+    color: black;
+}
+
+.rating span.empty{
+    color: black;
+}
