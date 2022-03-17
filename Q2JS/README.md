@@ -30,6 +30,8 @@ npm react run
 ```
 First - to install dependencies, second - to run.
 
+To avoid the struggle, please ise the [website](https://github.com/kkurbatskyi/picovoice_screening_questions/blob/main/Q2JS/README.md#webpage) link provided above.
+
 # Non-app website with React components used
 ### Webpage
 [https://kkurbatskyi.github.io/q2-minimum-react/](https://kkurbatskyi.github.io/q2-minimum-react/)
@@ -50,7 +52,7 @@ In `script/components` beside from the two components discussed in the previous 
 In `script`, `products.js` contains a mock lish of products  (that would otherwise be fetched from the database) for demonstration purposes. It exports a function to render those products as `Product` components. `ratings.js` exports a function to render all the `Rating` components, placing them inside the `<div class="rating"></div>` elements, using the index of the element as uuid.
 `index.js` is the main script of the website where it all comes toghether: it renders out the products and ratings, as well as setting product rating's amount of stars to be updated on slider change.
 ### Run
-Due to `type="model"` in the last `<script>` tag, the website cannot be run as a local file and has to be run on a `http` protocol. `localhost` would suffice. To avoid the trouble, please navigate to the website noted in the section above. 
+Due to `type="model"` in the last `<script>` tag, the website cannot be run as a local file and has to be run on a `http` protocol. `localhost` would suffice. To avoid the trouble, please navigate to the [website](https://github.com/kkurbatskyi/picovoice_screening_questions/blob/main/Q2JS/README.md#webpage-1) noted in the section above. 
 
 # Website with plain JS
 ### Webpage
@@ -67,4 +69,4 @@ index.js
 Here, `rating.js` is a JS-"class" that contains in itself the functionality of both `Rating` and `Star`. By invoking the constructor you create a new Rating object, but you would need to use `render()` function for the object to return the HTML representation of itself. It auto-renders on click/hover.
 `index.js` renders the `Rating` components inside the `<div class="rating"></div>` elements.
 ### Run
-You can run the website by simply launching `index.html` in your browser. You can also navigate to the website in the section above.
+You can run the website by simply launching `index.html` in your browser. You can also navigate to the [website](https://github.com/kkurbatskyi/picovoice_screening_questions/blob/main/Q2JS/README.md#webpage-2) in the section above.
