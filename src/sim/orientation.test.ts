@@ -18,7 +18,15 @@ import {
 const X = new Vector3(1, 0, 0);
 const Y = new Vector3(0, 1, 0);
 
-function body(patch: Partial<OrientedBody> = {}, orbitPatch: Partial<OrbitalElements> = {}): OrientedBody {
+/** Angle between vectors, precise near 0 (three's angleTo uses acos, which bottoms out at ~1.5e-8). */
+function angle(a: Vector3, b: Vector3): number {
+  return Math.atan2(new Vector3().crossVectors(a, b).length(), a.dot(b));
+}
+
+function body(
+  patch: Partial<OrientedBody> = {},
+  orbitPatch: Partial<OrbitalElements> = {},
+): OrientedBody {
   return {
     orbit: {
       semiMajorAxisKm: KM_PER_AU,
@@ -38,9 +46,17 @@ function body(patch: Partial<OrientedBody> = {}, orbitPatch: Partial<OrbitalElem
   };
 }
 
-function randomBody(r: ReturnType<typeof createRng>, patch: Partial<OrientedBody> = {}): OrientedBody {
+function randomBody(
+  r: ReturnType<typeof createRng>,
+  patch: Partial<OrientedBody> = {},
+): OrientedBody {
   return body(
-    { axialTiltRad: r.range(0, Math.PI), axialAzimuthRad: r.range(0, 2 * Math.PI), rotationPeriodHours: r.range(-500, 500), ...patch },
+    {
+      axialTiltRad: r.range(0, Math.PI),
+      axialAzimuthRad: r.range(0, 2 * Math.PI),
+      rotationPeriodHours: r.range(-500, 500),
+      ...patch,
+    },
     {
       eccentricity: r.range(0, 0.5),
       inclinationRad: r.range(0, Math.PI),
@@ -105,7 +121,10 @@ describe('frames', () => {
 
 describe('spin', () => {
   it('turns once per sidereal day about the spin axis, backwards when the period is negative', () => {
-    const b = body({ axialTiltRad: 0.41, axialAzimuthRad: 1.3, rotationPeriodHours: 10 }, { inclinationRad: 0.2 });
+    const b = body(
+      { axialTiltRad: 0.41, axialAzimuthRad: 1.3, rotationPeriodHours: 10 },
+      { inclinationRad: 0.2 },
+    );
     const q0 = bodyOrientation(b, 100, new Quaternion());
     const q1 = bodyOrientation(b, 100 + 10 / 24, new Quaternion());
     expect(Math.abs(q0.dot(q1))).toBeCloseTo(1, 9);
@@ -115,7 +134,10 @@ describe('spin', () => {
     const x0 = X.clone().applyQuaternion(q0);
     const x1 = X.clone().applyQuaternion(quarter);
     expect(new Vector3().crossVectors(x0, x1).dot(axis)).toBeCloseTo(1, 9);
-    const retro = body({ axialTiltRad: 0.41, axialAzimuthRad: 1.3, rotationPeriodHours: -10 }, { inclinationRad: 0.2 });
+    const retro = body(
+      { axialTiltRad: 0.41, axialAzimuthRad: 1.3, rotationPeriodHours: -10 },
+      { inclinationRad: 0.2 },
+    );
     const r0 = X.clone().applyQuaternion(bodyOrientation(retro, 100, new Quaternion()));
     const r1 = X.clone().applyQuaternion(bodyOrientation(retro, 100 + 2.5 / 24, new Quaternion()));
     expect(new Vector3().crossVectors(r0, r1).dot(axis)).toBeCloseTo(-1, 9);
@@ -125,7 +147,8 @@ describe('spin', () => {
   it('keeps the spin angle precise far from the epoch', () => {
     const b = body({ rotationPeriodHours: 9.925 });
     const days = (1e6 * 9.925) / 24; // a million rotations
-    expect(spinAngleRad(b, days)).toBeCloseTo(0, 6);
+    const phi = spinAngleRad(b, days);
+    expect(Math.min(phi, 2 * Math.PI - phi)).toBeLessThan(1e-8); // ≡ 0 (mod 2π)
   });
 });
 
@@ -133,7 +156,7 @@ describe('tidal locking', () => {
   const faceError = (b: OrientedBody, t: number): number => {
     const toParent = orbitalPositionKm(b.orbit, t, new Vector3()).negate().normalize();
     const face = X.clone().applyQuaternion(bodyOrientation(b, t, new Quaternion()));
-    return face.angleTo(toParent);
+    return angle(face, toParent);
   };
 
   it('keeps the prime meridian pointed at the parent (circular orbits)', () => {
@@ -151,7 +174,8 @@ describe('tidal locking', () => {
       const tilt = r.range(0, 0.2);
       const b = randomBody(r, { tidallyLocked: true, axialTiltRad: tilt });
       b.orbit.eccentricity = 0;
-      for (let k = 0; k < 8; k++) expect(faceError(b, r.range(-5000, 5000))).toBeLessThanOrEqual(tilt + 1e-9);
+      for (let k = 0; k < 8; k++)
+        expect(faceError(b, r.range(-5000, 5000))).toBeLessThanOrEqual(tilt + 1e-9);
     }
   });
 
@@ -161,7 +185,8 @@ describe('tidal locking', () => {
       const b = randomBody(r, { tidallyLocked: true, axialTiltRad: 0 });
       b.orbit.eccentricity = r.range(0.01, 0.1);
       let worst = 0;
-      for (let k = 0; k < 64; k++) worst = Math.max(worst, faceError(b, (k / 64) * b.orbit.periodDays));
+      for (let k = 0; k < 64; k++)
+        worst = Math.max(worst, faceError(b, (k / 64) * b.orbit.periodDays));
       expect(worst).toBeLessThan(2.1 * b.orbit.eccentricity + 1e-3);
       expect(worst).toBeGreaterThan(1.5 * b.orbit.eccentricity); // real libration, not a hack
     }
@@ -170,7 +195,10 @@ describe('tidal locking', () => {
 
 describe('moons', () => {
   it('equatorial moons orbit in the planet’s equatorial plane, expressed in frame S', () => {
-    const planet = body({ axialTiltRad: 0.47, axialAzimuthRad: 2.2 }, { inclinationRad: 0.1, longitudeAscendingNodeRad: 0.7 });
+    const planet = body(
+      { axialTiltRad: 0.47, axialAzimuthRad: 2.2 },
+      { inclinationRad: 0.1, longitudeAscendingNodeRad: 0.7 },
+    );
     const moon = body({}, { semiMajorAxisKm: 421_700, periodDays: 1.769 });
     const axis = spinAxis(planet, new Vector3());
     const p = new Vector3();
@@ -183,12 +211,17 @@ describe('moons', () => {
 
   it('moonOrientation composes the planet’s equatorial frame with the moon’s own orientation', () => {
     const planet = body({ axialTiltRad: 0.47, axialAzimuthRad: 2.2 }, { inclinationRad: 0.1 });
-    const moon = body({ tidallyLocked: true }, { semiMajorAxisKm: 421_700, periodDays: 1.769, inclinationRad: 0.01 });
+    const moon = body(
+      { tidallyLocked: true },
+      { semiMajorAxisKm: 421_700, periodDays: 1.769, inclinationRad: 0.01 },
+    );
     const q = moonOrientation(moon, planet, 3.3, new Quaternion());
-    const expected = equatorialFrame(planet, new Quaternion()).multiply(bodyOrientation(moon, 3.3, new Quaternion()));
+    const expected = equatorialFrame(planet, new Quaternion()).multiply(
+      bodyOrientation(moon, 3.3, new Quaternion()),
+    );
     expect(Math.abs(q.dot(expected))).toBeCloseTo(1, 12);
     // A locked moon faces its planet in frame S too.
     const toPlanet = moonPositionKm(moon, planet, 3.3, new Vector3()).negate().normalize();
-    expect(X.clone().applyQuaternion(q).angleTo(toPlanet)).toBeLessThan(1e-9);
+    expect(angle(X.clone().applyQuaternion(q), toPlanet)).toBeLessThan(1e-9);
   });
 });

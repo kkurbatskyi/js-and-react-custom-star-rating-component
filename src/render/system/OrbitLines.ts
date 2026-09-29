@@ -25,7 +25,12 @@ import type { Planet, StarSystem } from '../../core/types';
 import { orbitPathKm } from '../../sim/kepler';
 import type { IOrbitLines, OrbitLinesOptions, Quality, VisualFrame } from '../contracts';
 
-const SEGMENTS: Readonly<Record<Quality, number>> = { low: 128, medium: 256, high: 384, ultra: 512 };
+const SEGMENTS: Readonly<Record<Quality, number>> = {
+  low: 128,
+  medium: 256,
+  high: 384,
+  ultra: 512,
+};
 const BASE_COLOR = new Color(0.34, 0.5, 0.72);
 const HIGHLIGHT_COLOR = new Color(1, 0.78, 0.42);
 const BASE_ALPHA = 0.42;
@@ -72,7 +77,10 @@ export class OrbitLines implements IOrbitLines {
     for (const planet of system.planets) {
       const geometry = new BufferGeometry();
       // `segments + 1` vertices with the last repeating the first: a closed THREE.Line.
-      geometry.setAttribute('position', new BufferAttribute(orbitPathKm(planet.orbit, SEGMENTS[quality]), 3));
+      geometry.setAttribute(
+        'position',
+        new BufferAttribute(orbitPathKm(planet.orbit, SEGMENTS[quality]), 3),
+      );
       geometry.computeBoundingSphere();
       const material = new ShaderMaterial({
         glslVersion: GLSL3,
@@ -106,7 +114,9 @@ export class OrbitLines implements IOrbitLines {
     if (o.focusPositionKm) this.focus.copy(o.focusPositionKm);
     for (const { planet, line } of this.lines) {
       const u = line.material.uniforms;
-      const hit = o.highlightId !== null && (o.highlightId === planet.id || o.highlightId.startsWith(`${planet.id}.`));
+      const hit =
+        o.highlightId !== null &&
+        (o.highlightId === planet.id || o.highlightId.startsWith(`${planet.id}.`));
       (u.uColor.value as Color).copy(hit ? HIGHLIGHT_COLOR : BASE_COLOR);
       u.uOpacity.value = o.opacity * (hit ? HIGHLIGHT_ALPHA : BASE_ALPHA);
       u.uFadeNear.value = focusDist * 0.15;

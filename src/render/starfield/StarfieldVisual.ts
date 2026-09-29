@@ -196,7 +196,11 @@ export class StarfieldVisual implements IStarfieldVisual {
   }
 
   update(frame: VisualFrame, o: StarfieldOptions): void {
-    this.object.position.set(this.origin.x - o.cameraLy.x, this.origin.y - o.cameraLy.y, this.origin.z - o.cameraLy.z);
+    this.object.position.set(
+      this.origin.x - o.cameraLy.x,
+      this.origin.y - o.cameraLy.y,
+      this.origin.z - o.cameraLy.z,
+    );
     const u = this.uniforms;
     u.uExposure.value = o.exposure;
     u.uPixelRatio.value = frame.pixelRatio;
@@ -247,7 +251,12 @@ export class StarfieldVisual implements IStarfieldVisual {
       top.splice(at, 0, k);
       if (top.length > max) top.pop();
     }
-    return top.map((k) => ({ id: this.idOf(k), x: this.projX[k], y: this.projY[k], priority: -mag[k] }));
+    return top.map((k) => ({
+      id: this.idOf(k),
+      x: this.projX[k],
+      y: this.projY[k],
+      priority: -mag[k],
+    }));
   }
 
   dispose(): void {

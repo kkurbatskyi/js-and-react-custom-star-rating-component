@@ -3,7 +3,12 @@ import { createRng } from '../../core/rng';
 import type { GalaxyModel } from '../../core/types';
 import { createGalaxyModel, createGalaxyModelFromParams } from './model';
 import { createGalaxyParams, GALAXY_HOME_DENSITY } from './params';
-import { type GalaxyComponent, getGalaxyStructure, integrateDensity, SAMPLE_EXTENT } from './structure';
+import {
+  type GalaxyComponent,
+  getGalaxyStructure,
+  integrateDensity,
+  SAMPLE_EXTENT,
+} from './structure';
 
 const SEEDS = [1, 2, 3, 42] as const;
 const FWHM_TO_SIGMA = 1 / (2 * Math.sqrt(2 * Math.LN2));
@@ -62,7 +67,8 @@ describe('createGalaxyModel', () => {
       [1e8, -1e8, 1e8],
       [-7e4, 300, 7e4],
     ];
-    for (let i = 0; i < 5000; i++) probes.push([r.range(-9e4, 9e4), r.normal(0, 3000), r.range(-9e4, 9e4)]);
+    for (let i = 0; i < 5000; i++)
+      probes.push([r.range(-9e4, 9e4), r.normal(0, 3000), r.range(-9e4, 9e4)]);
     for (const [x, y, z] of probes) {
       const rho = m.stellarDensity(x, y, z);
       expect(Number.isFinite(rho)).toBe(true);
@@ -297,9 +303,11 @@ describe('performance', () => {
     }
     const time = (f: (x: number, y: number, z: number) => number) => {
       let acc = 0;
-      for (let i = 0; i < 30_000; i += 3) acc += f(pts[i] as number, pts[i + 1] as number, pts[i + 2] as number);
+      for (let i = 0; i < 30_000; i += 3)
+        acc += f(pts[i] as number, pts[i + 1] as number, pts[i + 2] as number);
       const t0 = performance.now();
-      for (let i = 0; i < n * 3; i += 3) acc += f(pts[i] as number, pts[i + 1] as number, pts[i + 2] as number);
+      for (let i = 0; i < n * 3; i += 3)
+        acc += f(pts[i] as number, pts[i + 1] as number, pts[i + 2] as number);
       expect(Number.isFinite(acc)).toBe(true);
       return performance.now() - t0;
     };

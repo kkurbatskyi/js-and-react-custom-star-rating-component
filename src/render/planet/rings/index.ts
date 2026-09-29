@@ -24,8 +24,14 @@ import {
   Uniform,
   Vector3,
 } from 'three';
-import type { BodyBase, RingSystem, RGB, StarSystem } from '../../../core/types';
-import { type IRingVisual, type PlanetUniforms, type Quality, RENDER_ORDER, type VisualFrame } from '../../contracts';
+import type { BodyBase, RGB, RingSystem, StarSystem } from '../../../core/types';
+import {
+  type IRingVisual,
+  type PlanetUniforms,
+  type Quality,
+  RENDER_ORDER,
+  type VisualFrame,
+} from '../../contracts';
 import { common } from '../../shaders/common.glsl';
 
 const SEGMENTS: Readonly<Record<Quality, number>> = { low: 96, medium: 160, high: 256, ultra: 384 };
@@ -104,7 +110,12 @@ class RingVisual implements IRingVisual {
 
   constructor(body: BodyBase, rings: RingSystem, quality: Quality) {
     this.object.name = 'rings';
-    this.geometry = new RingGeometry(rings.innerRadiusKm, rings.outerRadiusKm, SEGMENTS[quality], 1);
+    this.geometry = new RingGeometry(
+      rings.innerRadiusKm,
+      rings.outerRadiusKm,
+      SEGMENTS[quality],
+      1,
+    );
     this.geometry.rotateX(-Math.PI / 2); // XY → equatorial XZ plane, normal +Y
     const [r, g, b] = RING_COLORS[rings.composition];
     for (const [half, order] of [
@@ -161,6 +172,10 @@ class RingVisual implements IRingVisual {
 }
 
 /** Rings in the body's equatorial plane, or null when it has none (moons never do). */
-export function createRings(body: BodyBase, _system: StarSystem, quality: Quality): IRingVisual | null {
+export function createRings(
+  body: BodyBase,
+  _system: StarSystem,
+  quality: Quality,
+): IRingVisual | null {
   return body.rings ? new RingVisual(body, body.rings, quality) : null;
 }

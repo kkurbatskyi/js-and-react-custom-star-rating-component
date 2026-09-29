@@ -4,8 +4,8 @@ import type { BodyBase, PlanetType, StarSystem } from '../core/types';
 import { EARTH_MASS_KG, G_SI, KM_PER_AU, SECONDS_PER_DAY, SOLAR_MASS_KG } from '../core/units';
 import { createGalaxyModel } from '../gen/galaxy/model';
 import { CATALOG_LEVELS, cellSizeLy, levelForAbsMag, STAR_KINDS } from './contracts';
-import { DEFAULT_GALAXY_SEED, getUniverse } from './index';
 import { formatStarId, parseId, planetIdOf, starIdOf } from './ids';
+import { DEFAULT_GALAXY_SEED, getUniverse } from './index';
 import { createMockCatalog, MOCK_RADIUS_LY } from './mock';
 
 const universe = getUniverse();

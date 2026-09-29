@@ -10,7 +10,16 @@
  * the PlanetVisual's root group, which already carries `positionKm` and `orientation`. Work in
  * body-fixed km (Y = spin axis) and do NOT apply positionKm/orientation to `object` yourself.
  */
-import { Color, GLSL3, Mesh, NormalBlending, ShaderMaterial, SphereGeometry, Uniform, Vector3 } from 'three';
+import {
+  Color,
+  GLSL3,
+  Mesh,
+  NormalBlending,
+  ShaderMaterial,
+  SphereGeometry,
+  Uniform,
+  Vector3,
+} from 'three';
 import type { BodyBase, StarSystem } from '../../../core/types';
 import {
   type IAtmosphereShell,
@@ -114,7 +123,11 @@ class AtmosphereShell implements IAtmosphereShell {
 }
 
 /** A limb-glow shell for bodies with a meaningful atmosphere, else null. */
-export function createAtmosphere(body: BodyBase, _system: StarSystem, quality: Quality): IAtmosphereShell | null {
+export function createAtmosphere(
+  body: BodyBase,
+  _system: StarSystem,
+  quality: Quality,
+): IAtmosphereShell | null {
   const atm = body.atmosphere;
   if (!atm || atm.surfacePressureAtm < MIN_PRESSURE_ATM || !body.appearance.hazeColor) return null;
   return new AtmosphereShell(body, atm.surfacePressureAtm, atm.scaleHeightKm, quality);

@@ -97,7 +97,7 @@ export interface GalaxyModel {
   readonly params: GalaxyParams;
   /**
    * Stars per cubic light-year at a galactic position.
-   * Calibrated so a solar-neighbourhood-like spot (R ≈ 26 kly, midplane, between arms) ≈ 0.004.
+   * Calibrated to 0.004 at homeLy (midplane, on an arm's outer edge); interarm ≈ 0.002, arm ridges ≈ 0.007.
    */
   stellarDensity(x: number, y: number, z: number): number;
   /** Relative dust density 0..~1 — dark lanes on the inner (concave) edges of arms, thin in y. */

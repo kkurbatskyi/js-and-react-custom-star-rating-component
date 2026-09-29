@@ -28,11 +28,17 @@ import {
   romanNumeral,
   THIN_SPACE,
 } from './format';
-import { DAYS_PER_YEAR, J2000_UNIX_MS, JUPITER_MASS_EARTH, KM_PER_AU, KM_PER_LY, MS_PER_DAY } from './units';
+import {
+  DAYS_PER_YEAR,
+  J2000_UNIX_MS,
+  JUPITER_MASS_EARTH,
+  KM_PER_AU,
+  KM_PER_LY,
+  MS_PER_DAY,
+} from './units';
 
 /** Replace typographic spaces/minus with ASCII so expectations stay readable. */
-const plain = (s: string): string =>
-  s.replace(/[\u00A0\u202F]/g, ' ').replace(/\u2212/g, '-');
+const plain = (s: string): string => s.replace(/[\u00A0\u202F]/g, ' ').replace(/\u2212/g, '-');
 
 describe('typography', () => {
   it('groups digits with a narrow no-break space and joins units with a no-break space', () => {
@@ -256,7 +262,9 @@ describe('time', () => {
     expect(formatSimDate(0)).toBe('2000-01-01 12:00 UTC');
     expect(formatSimDate(simDaysOf(Date.UTC(2026, 8, 29, 14, 3, 30)))).toBe('2026-09-29 14:03 UTC');
     expect(formatSimDate(simDaysOf(Date.UTC(2024, 1, 29, 0, 0, 30)))).toBe('2024-02-29 00:00 UTC');
-    expect(formatSimDate(simDaysOf(Date.UTC(1999, 11, 31, 23, 59, 30)))).toBe('1999-12-31 23:59 UTC');
+    expect(formatSimDate(simDaysOf(Date.UTC(1999, 11, 31, 23, 59, 30)))).toBe(
+      '1999-12-31 23:59 UTC',
+    );
     expect(formatSimDate(1e9)).toMatch(/^\d{7}-\d\d-\d\d \d\d:\d\d UTC$/); // past JS Date's range
   });
 

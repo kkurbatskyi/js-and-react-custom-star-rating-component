@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createGalaxyParams, drawGalaxyShape, finalizeGalaxyParams, HOME_RADIUS_FRACTION } from './params';
+import {
+  createGalaxyParams,
+  drawGalaxyShape,
+  finalizeGalaxyParams,
+  HOME_RADIUS_FRACTION,
+} from './params';
 import { getGalaxyStructure } from './structure';
 
 const DEG = Math.PI / 180;

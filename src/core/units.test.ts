@@ -28,7 +28,7 @@ describe('units', () => {
   it('derived constants are consistent', () => {
     expect(AU_PER_LY).toBeCloseTo(63_241.077, 2);
     expect(LY_PER_PC).toBeCloseTo(3.26156, 5);
-    expect(KM_PER_PC / 3.0856775814913673e13).toBeCloseTo(1, 12);
+    expect(KM_PER_PC / 3.085_677_581_491_367e13).toBeCloseTo(1, 12);
     expect(SOLAR_MASS_EARTH).toBeCloseTo(332_946, -1);
     expect(SOLAR_MASS_JUPITER).toBeCloseTo(1047.6, 0);
     expect(J2000_UNIX_MS).toBe(946_728_000_000);

@@ -199,7 +199,12 @@ export class PlanetVisual implements IPlanetVisual {
     uIntensity: new Uniform(1),
   };
 
-  constructor(body: BodyBase, ctx: { system: StarSystem }, quality: Quality, detail: PlanetDetail = 'full') {
+  constructor(
+    body: BodyBase,
+    ctx: { system: StarSystem },
+    quality: Quality,
+    detail: PlanetDetail = 'full',
+  ) {
     this.body = body;
     this.detail = detail;
     this.object.name = `PlanetVisual:${body.id}`;
@@ -210,7 +215,11 @@ export class PlanetVisual implements IPlanetVisual {
     colors.slice(0, MAX_COLORS).forEach((c, i) => u.uColors.value[i].setRGB(c[0], c[1], c[2]));
     u.uColorCount.value = Math.min(colors.length, MAX_COLORS);
     u.uBanded.value = body.type === 'gas-giant' || body.type === 'ice-giant' ? 1 : 0;
-    u.uSeed.value.set((body.seed % 1009) / 10.09, ((body.seed >>> 10) % 1013) / 10.13, ((body.seed >>> 20) % 1019) / 10.19);
+    u.uSeed.value.set(
+      (body.seed % 1009) / 10.09,
+      ((body.seed >>> 10) % 1013) / 10.13,
+      ((body.seed >>> 20) % 1019) / 10.19,
+    );
     u.uOcean.value = a.oceanColor ? body.oceanCoverage : 0;
     if (a.oceanColor) u.uOceanColor.value.setRGB(a.oceanColor[0], a.oceanColor[1], a.oceanColor[2]);
     u.uIce.value = body.type === 'ice' ? 0 : body.iceCoverage; // ice worlds are ice in their palette
@@ -242,7 +251,8 @@ export class PlanetVisual implements IPlanetVisual {
     this.atmosphere = detail === 'full' ? createAtmosphere(body, system, quality) : null;
     this.clouds = detail === 'full' ? createClouds(body, system, quality) : null;
     this.rings = createRings(body, system, quality);
-    for (const part of [this.atmosphere, this.clouds, this.rings]) if (part) this.object.add(part.object);
+    for (const part of [this.atmosphere, this.clouds, this.rings])
+      if (part) this.object.add(part.object);
   }
 
   prepare(_renderer: WebGLRenderer, _budgetMs: number): boolean {

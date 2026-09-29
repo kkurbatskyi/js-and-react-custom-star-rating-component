@@ -30,7 +30,9 @@ function describeFocus(focus: FocusTarget, universe: Universe): string {
     case 'moon': {
       const body = universe.getBody(focus.id);
       if (!body) return focus.id;
-      return body.moon ? `${body.moon.name} · moon of ${body.planet.name}` : `${body.planet.name} · ${body.system.star.name}`;
+      return body.moon
+        ? `${body.moon.name} · moon of ${body.planet.name}`
+        : `${body.planet.name} · ${body.system.star.name}`;
     }
   }
 }

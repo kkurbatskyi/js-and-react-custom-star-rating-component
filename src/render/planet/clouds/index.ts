@@ -10,6 +10,10 @@
 import type { BodyBase, StarSystem } from '../../../core/types';
 import type { ICloudLayer, Quality } from '../../contracts';
 
-export function createClouds(_body: BodyBase, _system: StarSystem, _quality: Quality): ICloudLayer | null {
+export function createClouds(
+  _body: BodyBase,
+  _system: StarSystem,
+  _quality: Quality,
+): ICloudLayer | null {
   return null;
 }

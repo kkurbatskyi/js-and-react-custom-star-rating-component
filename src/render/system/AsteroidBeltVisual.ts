@@ -8,13 +8,32 @@
  * Constant pixel size (rocks are always sub-pixel at system scale), additive and faint.
  * Known limit: rocks do not orbit yet (the belt does not know its star's mass).
  */
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, GLSL3, Points, ShaderMaterial, Uniform } from 'three';
+import {
+  AdditiveBlending,
+  BufferAttribute,
+  BufferGeometry,
+  Color,
+  GLSL3,
+  Points,
+  ShaderMaterial,
+  Uniform,
+} from 'three';
 import { TAU } from '../../core/math';
 import { createRng } from '../../core/rng';
 import type { AsteroidBelt, RGB } from '../../core/types';
-import type { IAsteroidBeltVisual, Quality, SystemFurnitureOptions, VisualFrame } from '../contracts';
+import type {
+  IAsteroidBeltVisual,
+  Quality,
+  SystemFurnitureOptions,
+  VisualFrame,
+} from '../contracts';
 
-const COUNT_SCALE: Readonly<Record<Quality, number>> = { low: 0.35, medium: 0.6, high: 1, ultra: 1.5 };
+const COUNT_SCALE: Readonly<Record<Quality, number>> = {
+  low: 0.35,
+  medium: 0.6,
+  high: 1,
+  ultra: 1.5,
+};
 const MAX_ROCKS = 20_000;
 const COLORS: Readonly<Record<AsteroidBelt['composition'], RGB>> = {
   rock: [0.55, 0.47, 0.4],

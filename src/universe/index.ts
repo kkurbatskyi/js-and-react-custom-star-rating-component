@@ -6,6 +6,9 @@
  * replace the catalogue behind `createMockCatalog`; everything in this file (caching, queries,
  * search, random picks) is written against the `MockCatalog` shape and stays.
  */
+
+import { formatLy } from '../core/format';
+import { hash32, hashString } from '../core/hash';
 import type {
   BodyId,
   GalaxyModel,
@@ -20,8 +23,6 @@ import type {
   Vec3Tuple,
 } from '../core/types';
 import { LY_PER_PC } from '../core/units';
-import { formatLy } from '../core/format';
-import { hash32, hashString } from '../core/hash';
 import { createGalaxyModel } from '../gen/galaxy/model';
 import {
   type BlockQuery,

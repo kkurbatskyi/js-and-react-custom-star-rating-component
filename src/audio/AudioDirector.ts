@@ -1,8 +1,8 @@
 /**
  * AudioDirector — STUB (integration phase). Contract-complete but silent: it owns the
  * AudioContext lifecycle (created/resumed only from a user gesture, as browsers require) and a
- * master gain node, and remembers every setting, so the UI and engine can integrate now. The
- * audio specialist replaces the internals with the generative score and SFX.
+ * master gain honouring enabled/volume, so the UI and engine can integrate now. The audio
+ * specialist replaces the internals with the generative score and SFX.
  */
 import type { AudioScene, IAudioDirector, SfxName } from './contracts';
 
@@ -19,8 +19,6 @@ class StubAudioDirector implements IAudioDirector {
   private master: GainNode | null = null;
   private enabled = false;
   private volume = 0.6;
-  private scene: AudioScene | null = null;
-  private travel = 0;
 
   get unlocked(): boolean {
     return this.ctx?.state === 'running';
@@ -52,16 +50,16 @@ class StubAudioDirector implements IAudioDirector {
     this.applyGain();
   }
 
-  setScene(s: AudioScene): void {
-    this.scene = s; // the generative score will morph towards this
+  setScene(_scene: AudioScene): void {
+    // Silent stub: the generative score will morph towards the scene.
   }
 
   sfx(_name: SfxName): void {
     // Silent stub.
   }
 
-  setTravel(intensity: number): void {
-    this.travel = Math.min(1, Math.max(0, intensity));
+  setTravel(_intensity: number): void {
+    // Silent stub: the travel whoosh / rising drone.
   }
 
   dispose(): void {
@@ -69,8 +67,6 @@ class StubAudioDirector implements IAudioDirector {
     this.master = null;
     void this.ctx?.close().catch(() => undefined);
     this.ctx = null;
-    this.scene = null;
-    this.travel = 0;
   }
 
   private applyGain(): void {

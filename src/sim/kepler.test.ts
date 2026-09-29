@@ -60,7 +60,10 @@ describe('solveKepler', () => {
     // cos ν = (cos E − e)/(1 − e cos E)
     const E = 1.1;
     const e = 0.4;
-    expect(Math.cos(trueAnomalyFromEccentric(E, e))).toBeCloseTo((Math.cos(E) - e) / (1 - e * Math.cos(E)), 12);
+    expect(Math.cos(trueAnomalyFromEccentric(E, e))).toBeCloseTo(
+      (Math.cos(E) - e) / (1 - e * Math.cos(E)),
+      12,
+    );
   });
 });
 
@@ -82,7 +85,12 @@ describe('orbitalPositionKm', () => {
   });
 
   it('periapsis at epoch (M₀ = 0) and apoapsis half a period later', () => {
-    const o = orbit({ eccentricity: 0.6, argumentPeriapsisRad: 0.7, inclinationRad: 0.3, longitudeAscendingNodeRad: 2 });
+    const o = orbit({
+      eccentricity: 0.6,
+      argumentPeriapsisRad: 0.7,
+      inclinationRad: 0.3,
+      longitudeAscendingNodeRad: 2,
+    });
     expect(orbitalPositionKm(o, 0, v).length()).toBeCloseTo(periapsisKm(o), 2);
     expect(orbitalPositionKm(o, o.periodDays / 2, v).length()).toBeCloseTo(apoapsisKm(o), 2);
     expect(periapsisKm(o)).toBeCloseTo(0.4 * KM_PER_AU, 3);
@@ -115,7 +123,12 @@ describe('orbitalPositionKm', () => {
   });
 
   it('velocity matches the finite-difference derivative and vis-viva', () => {
-    const o = orbit({ eccentricity: 0.3, inclinationRad: 0.2, argumentPeriapsisRad: 1, periodDays: orbitalPeriodDays(KM_PER_AU, SOLAR_MASS_KG) });
+    const o = orbit({
+      eccentricity: 0.3,
+      inclinationRad: 0.2,
+      argumentPeriapsisRad: 1,
+      periodDays: orbitalPeriodDays(KM_PER_AU, SOLAR_MASS_KG),
+    });
     const mu = (G_SI * SOLAR_MASS_KG) / 1e9; // km³/s²
     const vel = new Vector3();
     const a = new Vector3();
@@ -140,18 +153,29 @@ describe('orbitalPositionKm', () => {
     expect(M).toBeLessThanOrEqual(Math.PI);
     expect(eccentricAnomalyAt(o, 0)).toBe(0);
     expect(meanAnomalyAt(orbit({ periodDays: 0, meanAnomalyEpochRad: 1 }), 50)).toBe(1);
-    expect(meanLongitude(orbit({ longitudeAscendingNodeRad: 1, argumentPeriapsisRad: 0.5 }), 0)).toBeCloseTo(1.5, 12);
+    expect(
+      meanLongitude(orbit({ longitudeAscendingNodeRad: 1, argumentPeriapsisRad: 0.5 }), 0),
+    ).toBeCloseTo(1.5, 12);
   });
 });
 
 describe('orbitPathKm', () => {
-  it('is a closed loop of segments + 1 vertices on the ellipse, denser at periapsis', () => {
-    const o = orbit({ eccentricity: 0.7, inclinationRad: 0.4, longitudeAscendingNodeRad: 1, argumentPeriapsisRad: 2 });
+  it('is a closed loop of segments + 1 vertices on the ellipse, smooth at periapsis', () => {
+    const o = orbit({
+      eccentricity: 0.7,
+      inclinationRad: 0.4,
+      longitudeAscendingNodeRad: 1,
+      argumentPeriapsisRad: 2,
+    });
     const segs = 128;
     const path = orbitPathKm(o, segs);
     expect(path).toBeInstanceOf(Float32Array);
     expect(path.length).toBe((segs + 1) * 3);
-    expect([path[0], path[1], path[2]]).toEqual([path[segs * 3], path[segs * 3 + 1], path[segs * 3 + 2]]);
+    expect([path[0], path[1], path[2]]).toEqual([
+      path[segs * 3],
+      path[segs * 3 + 1],
+      path[segs * 3 + 2],
+    ]);
     const n = orbitNormal(o, new Vector3());
     const p = new Vector3();
     for (let i = 0; i <= segs; i++) {
@@ -164,8 +188,14 @@ describe('orbitPathKm', () => {
     // Vertex 0 is periapsis and matches the position at epoch.
     const epoch = orbitalPositionKm(o, 0, new Vector3());
     expect(p.fromArray(path, 0).distanceTo(epoch) / epoch.length()).toBeLessThan(1e-6);
-    const seg = (i: number) => p.fromArray(path, i * 3).distanceTo(new Vector3().fromArray(path, (i + 1) * 3));
-    expect(seg(0)).toBeLessThan(seg(segs / 2)); // uniform in E: finer steps near periapsis
+    // Uniform in E: the periapsis chord is short, where sampling uniformly in time (M) would leave
+    // a long straight segment because the body moves fastest there.
+    const periChord = p.fromArray(path, 0).distanceTo(new Vector3().fromArray(path, 3));
+    const timeChord = orbitalPositionKm(o, 0, new Vector3()).distanceTo(
+      orbitalPositionKm(o, o.periodDays / segs, new Vector3()),
+    );
+    // Near periapsis dE/dM = 1/(1 − e), so the time-uniform chord is ≈ 1/(1 − e) = 3.3× longer.
+    expect(timeChord / periChord).toBeCloseTo(1 / (1 - o.eccentricity), 0);
   });
 });
 

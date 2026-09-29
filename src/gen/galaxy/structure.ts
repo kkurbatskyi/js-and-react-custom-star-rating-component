@@ -24,7 +24,13 @@ import type { GalaxyParams, Rng } from '../../core/types';
 export type GalaxyShapeParams = Omit<GalaxyParams, 'homeLy' | 'estimatedStarCount'>;
 
 export type GalaxyComponent = 'disk' | 'arm' | 'bulge' | 'bar' | 'halo';
-export const GALAXY_COMPONENTS: readonly GalaxyComponent[] = ['disk', 'arm', 'bulge', 'bar', 'halo'];
+export const GALAXY_COMPONENTS: readonly GalaxyComponent[] = [
+  'disk',
+  'arm',
+  'bulge',
+  'bar',
+  'halo',
+];
 
 // ───────────────────────────────────────────── Tunables (see README for the physics behind them)
 
@@ -533,15 +539,14 @@ export function buildGalaxyStructure(shape: GalaxyShapeParams): GalaxyStructure 
       lane = armEnvelope(r) * Math.exp(-0.5 * t * t);
     }
     sampleGrid(x, z);
-    return (
-      radial * vertical * (scratch[S_DUST] as number) * (DUST_FLOOR + (1 - DUST_FLOOR) * lane)
-    );
+    return radial * vertical * (scratch[S_DUST] as number) * (DUST_FLOOR + (1 - DUST_FLOOR) * lane);
   };
 
   const young = (x: number, y: number, z: number): number => {
     const total = evaluate(x, y, z);
     if (!(total > 0)) return 0;
-    const v = ((scratch[S_ARM] as number) + YOUNG_DISK_BASELINE * (scratch[S_THIN] as number)) / total;
+    const v =
+      ((scratch[S_ARM] as number) + YOUNG_DISK_BASELINE * (scratch[S_THIN] as number)) / total;
     return v > 1 ? 1 : v;
   };
 

@@ -8,18 +8,13 @@ import {
   G_SI,
   KM_PER_AU,
   LY_PER_PC,
+  MOLAR_GAS_CONSTANT,
   SOLAR_ABS_MAG_BOL,
   SOLAR_ABS_MAG_V,
   SOLAR_MASS_KG,
   SOLAR_TEMP_K,
   STANDARD_GRAVITY_MS2,
 } from '../core/units';
-
-/**
- * Molar gas constant R (CODATA 2018, exact), J mol⁻¹ K⁻¹.
- * TODO(core): move to src/core/units.ts — requested in the integration-stubs report.
- */
-const MOLAR_GAS_CONSTANT = 8.314_462_618;
 
 /** Molar masses (g/mol) of the gases the mock atmospheres use. */
 const MOLAR_MASS_G: Readonly<Record<string, number>> = {
@@ -45,7 +40,12 @@ export const solarMassKg = (massSolar: number): number => massSolar * SOLAR_MASS
 export const earthMassKg = (massEarth: number): number => massEarth * EARTH_MASS_KG;
 
 /** Hill radius a(1−e)·∛(m / 3M) — moons are stable well inside ~⅓ of it. */
-export function hillRadiusKm(aKm: number, e: number, massKg: number, centralMassKg: number): number {
+export function hillRadiusKm(
+  aKm: number,
+  e: number,
+  massKg: number,
+  centralMassKg: number,
+): number {
   return aKm * (1 - e) * Math.cbrt(massKg / (3 * centralMassKg));
 }
 
@@ -100,7 +100,9 @@ export function meanMolarMassG(composition: readonly { gas: string; fraction: nu
 
 /** Isothermal scale height H = R·T / (μ·g), km. Earth: ≈ 8.4 km. */
 export function scaleHeightKm(tempK: number, molarMassG: number, gravityG: number): number {
-  return (MOLAR_GAS_CONSTANT * tempK) / ((molarMassG / 1000) * gravityG * STANDARD_GRAVITY_MS2) / 1000;
+  return (
+    (MOLAR_GAS_CONSTANT * tempK) / ((molarMassG / 1000) * gravityG * STANDARD_GRAVITY_MS2) / 1000
+  );
 }
 
 /** Sudarsky gas-giant class from equilibrium temperature (Sudarsky, Burrows & Hubeny 2000). */

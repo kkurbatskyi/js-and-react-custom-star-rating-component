@@ -74,7 +74,9 @@ export function eccentricAnomalyAt(orbit: OrbitalElements, simDays: number): num
 
 /** Mean longitude λ = Ω + ω + M at `simDays`, in (−π, π]. */
 export function meanLongitude(orbit: OrbitalElements, simDays: number): number {
-  return wrapAngle(orbit.longitudeAscendingNodeRad + orbit.argumentPeriapsisRad + meanAnomalyAt(orbit, simDays));
+  return wrapAngle(
+    orbit.longitudeAscendingNodeRad + orbit.argumentPeriapsisRad + meanAnomalyAt(orbit, simDays),
+  );
 }
 
 /** Scratch perifocal basis: P (towards periapsis) then Q (90° ahead), already in Y-up axes. */
@@ -124,7 +126,12 @@ export function orbitalPositionKm(orbit: OrbitalElements, simDays: number, out: 
   const e = clampEccentricity(orbit.eccentricity);
   const a = orbit.semiMajorAxisKm;
   const E = solveKepler(meanAnomalyAt(orbit, simDays), e);
-  return perifocalToParent(orbit, a * (Math.cos(E) - e), a * Math.sqrt(1 - e * e) * Math.sin(E), out);
+  return perifocalToParent(
+    orbit,
+    a * (Math.cos(E) - e),
+    a * Math.sqrt(1 - e * e) * Math.sin(E),
+    out,
+  );
 }
 
 /**
@@ -139,14 +146,20 @@ export function orbitalVelocityKms(orbit: OrbitalElements, simDays: number, out:
   const E = solveKepler(meanAnomalyAt(orbit, simDays), e);
   const cosE = Math.cos(E);
   const eDot = TAU / (P * SECONDS_PER_DAY) / (1 - e * cosE);
-  return perifocalToParent(orbit, -a * Math.sin(E) * eDot, a * Math.sqrt(1 - e * e) * cosE * eDot, out);
+  return perifocalToParent(
+    orbit,
+    -a * Math.sin(E) * eDot,
+    a * Math.sqrt(1 - e * e) * cosE * eDot,
+    out,
+  );
 }
 
 /**
  * Closed orbit polyline relative to the parent (same frame as `orbitalPositionKm`), as xyz
  * triples: `segments + 1` vertices starting at periapsis, the last repeating the first so it can
  * be drawn as a `THREE.Line` (or drop it for `LineLoop`). Sampled uniformly in eccentric anomaly,
- * which concentrates vertices near periapsis where curvature is highest.
+ * which spaces vertices evenly around the ellipse — sampling uniformly in time would leave long
+ * straight chords at periapsis, where the body moves fastest.
  * Note float32: ~7 significant digits (≈ 450 km at 50 AU) — fine for lines seen at orbit scale.
  */
 export function orbitPathKm(orbit: OrbitalElements, segments: number): Float32Array {
@@ -187,13 +200,23 @@ export function apoapsisKm(orbit: OrbitalElements): number {
 }
 
 /** Kepler's third law: P = 2π √(a³ / G(M + m)). Masses in kg. */
-export function orbitalPeriodDays(semiMajorAxisKm: number, centralMassKg: number, orbitingMassKg = 0): number {
+export function orbitalPeriodDays(
+  semiMajorAxisKm: number,
+  centralMassKg: number,
+  orbitingMassKg = 0,
+): number {
   const aM = semiMajorAxisKm * 1000;
-  return (TAU * Math.sqrt((aM * aM * aM) / (G_SI * (centralMassKg + orbitingMassKg)))) / SECONDS_PER_DAY;
+  return (
+    (TAU * Math.sqrt((aM * aM * aM) / (G_SI * (centralMassKg + orbitingMassKg)))) / SECONDS_PER_DAY
+  );
 }
 
 /** Inverse of `orbitalPeriodDays`: a = ∛(G(M + m) (P / 2π)²). */
-export function semiMajorAxisKmForPeriod(periodDays: number, centralMassKg: number, orbitingMassKg = 0): number {
+export function semiMajorAxisKmForPeriod(
+  periodDays: number,
+  centralMassKg: number,
+  orbitingMassKg = 0,
+): number {
   const t = (periodDays * SECONDS_PER_DAY) / TAU;
   return Math.cbrt(G_SI * (centralMassKg + orbitingMassKg) * t * t) / 1000;
 }

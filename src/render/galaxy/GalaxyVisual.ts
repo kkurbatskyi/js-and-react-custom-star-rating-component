@@ -99,15 +99,15 @@ function buildGeometry(model: GalaxyModel, count: number): BufferGeometry {
     const young = model.youngFraction(x, y, z);
     const dust = model.dustDensity(x, y, z);
     const o = i * 3;
-    let size = rng.range(260, 620);
+    let size = rng.range(700, 1800);
     let brightness = rng.range(0.5, 1.1);
     if (young > 0.35 && rng.chance(0.03 * young)) {
       // HII knot: small, bright, pink.
       colors[o] = HII[0];
       colors[o + 1] = HII[1];
       colors[o + 2] = HII[2];
-      size = rng.range(90, 180);
-      brightness = 3;
+      size = rng.range(160, 320);
+      brightness = 14;
     } else {
       const disk = 5600 + (4200 - 5600) * bulge;
       blackbodyRGBInto(disk + (14_000 - disk) * young * young, colors, o);
@@ -116,12 +116,12 @@ function buildGeometry(model: GalaxyModel, count: number): BufferGeometry {
       for (let c = 0; c < 3; c++) colors[o + c] = Math.max(0, lum + (colors[o + c] - lum) * 1.3);
       if (rng.chance(0.04)) {
         // Compact star clouds give the disk some grain.
-        size *= 0.3;
-        brightness *= 2.5;
+        size *= 0.2;
+        brightness *= 12;
       }
     }
     brightness *= Math.exp(-2.2 * dust); // dust lanes
-    const k = 0.06 * brightness;
+    const k = 0.011 * brightness;
     colors[o] *= k;
     colors[o + 1] *= k;
     colors[o + 2] *= k;
