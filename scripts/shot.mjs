@@ -123,6 +123,9 @@ async function main() {
     const page = await context.newPage();
     page.on('console', (msg) => {
       const type = msg.type();
+      // SwiftShader/ANGLE performance hints ("GPU stall due to ReadPixels") are noise, not bugs.
+      if (type === 'warning' && msg.text().includes('GL Driver Message (OpenGL, Performance'))
+        return;
       if (type === 'error' || type === 'warning') {
         const loc = msg.location();
         const where = loc.url

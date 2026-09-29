@@ -244,8 +244,8 @@ export function createHarness(options: HarnessOptions = {}): Harness {
   const bloom = post.getBloom();
   const view = {
     exposure: post.getExposure(),
-    vignette: true,
-    grain: 0.035,
+    vignette: post.getVignette(),
+    grain: post.getGrain(),
     fov: camera.fov,
     quality,
     copyLink: (): void => {
@@ -268,9 +268,7 @@ export function createHarness(options: HarnessOptions = {}): Harness {
       params.set('quality', q);
       location.search = params.toString();
     });
-  harnessFolder
-    .add(view, 'exposure', 0.05, 8, 0.01)
-    .onChange((v: number) => post.setExposure(v));
+  harnessFolder.add(view, 'exposure', 0.05, 8, 0.01).onChange((v: number) => post.setExposure(v));
   harnessFolder
     .add(bloom, 'intensity', 0, 4, 0.01)
     .name('bloom intensity')
@@ -284,9 +282,7 @@ export function createHarness(options: HarnessOptions = {}): Harness {
     .name('bloom radius')
     .onChange((v: number) => post.setBloom({ radius: v }));
   harnessFolder.add(view, 'vignette').onChange((v: boolean) => post.setVignette(v));
-  harnessFolder
-    .add(view, 'grain', 0, 0.2, 0.005)
-    .onChange((v: number) => post.setGrain(v));
+  harnessFolder.add(view, 'grain', 0, 0.2, 0.005).onChange((v: number) => post.setGrain(v));
   harnessFolder
     .add(view, 'fov', 5, 120, 1)
     .name('fov (deg)')

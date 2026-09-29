@@ -2,14 +2,17 @@
  * Identifier grammar (src/core/types.ts, docs/ARCHITECTURE.md §7). Ids are deep-link tokens, so
  * every object has exactly ONE canonical spelling: no leading zeros, no "-0", no '+'.
  *
- *   StarId   = `${sx}.${sy}.${sz}.${i}`   integer sector coordinates (may be negative), index ≥ 0
- *   PlanetId = `${StarId}.${letter}`      letter 'b'…'z' by orbital order (index 0 = 'b')
- *   MoonId   = `${PlanetId}.${n}`         n ≥ 1 by orbital order around the planet
+ *   BlockKey = `${level}.${cx}.${cy}.${cz}`  catalogue level (luminosity band, 0 … CATALOG_LEVELS−1)
+ *                                           + integer cell coordinates at that level's cell size
+ *   StarId   = `${BlockKey}.${i}`            i = the star's draw order within its cell (≥ 0)
+ *   PlanetId = `${StarId}.${letter}`         letter 'b'…'z' by orbital order (index 0 = 'b')
+ *   MoonId   = `${PlanetId}.${n}`            n ≥ 1 by orbital order around the planet
  */
 import type { BodyId, MoonId, PlanetId, StarId, Vec3Tuple } from '../core/types';
+import { CATALOG_LEVELS } from './contracts';
 
 export type ParsedId =
-  | { kind: 'star'; starId: StarId; sector: Vec3Tuple; index: number }
+  | { kind: 'star'; starId: StarId; level: number; cell: Vec3Tuple; index: number }
   | {
       kind: 'planet';
       starId: StarId;
@@ -36,9 +39,13 @@ const UNSIGNED_INT = /^(0|[1-9]\d*)$/;
 const LETTER = /^[b-z]$/;
 const MOON_NUMBER = /^[1-9]\d?$/;
 
-export function formatStarId(sx: number, sy: number, sz: number, index: number): StarId {
+export function formatBlockKey(level: number, cx: number, cy: number, cz: number): string {
   // `${-0}` is "0", so negative zero cannot leak into an id.
-  return `${sx}.${sy}.${sz}.${index}`;
+  return `${level}.${cx}.${cy}.${cz}`;
+}
+
+export function formatStarId(level: number, cell: Vec3Tuple, index: number): StarId {
+  return `${formatBlockKey(level, cell[0], cell[1], cell[2])}.${index}`;
 }
 
 export function planetLetter(index: number): string {
@@ -60,19 +67,24 @@ export function formatMoonId(planetId: PlanetId, index: number): MoonId {
 /** Parse any star, planet or moon id. Returns null for anything non-canonical. */
 export function parseId(id: string): ParsedId | null {
   const parts = id.split('.');
-  if (parts.length < 4 || parts.length > 6) return null;
-  const [a, b, c, d, letter, moon] = parts;
-  if (!SIGNED_INT.test(a) || !SIGNED_INT.test(b) || !SIGNED_INT.test(c) || !UNSIGNED_INT.test(d)) {
-    return null;
-  }
-  const starId = `${a}.${b}.${c}.${d}`;
-  if (parts.length === 4) {
-    return { kind: 'star', starId, sector: [Number(a), Number(b), Number(c)], index: Number(d) };
+  if (parts.length < 5 || parts.length > 7) return null;
+  const [level, cx, cy, cz, i, letter, moon] = parts;
+  if (!UNSIGNED_INT.test(level) || Number(level) >= CATALOG_LEVELS) return null;
+  if (!SIGNED_INT.test(cx) || !SIGNED_INT.test(cy) || !SIGNED_INT.test(cz) || !UNSIGNED_INT.test(i)) return null;
+  const starId = `${level}.${cx}.${cy}.${cz}.${i}`;
+  if (parts.length === 5) {
+    return {
+      kind: 'star',
+      starId,
+      level: Number(level),
+      cell: [Number(cx), Number(cy), Number(cz)],
+      index: Number(i),
+    };
   }
   if (!LETTER.test(letter)) return null;
   const planetIndex = letter.charCodeAt(0) - 98;
   const planetId = `${starId}.${letter}`;
-  if (parts.length === 5) return { kind: 'planet', starId, planetId, planetIndex };
+  if (parts.length === 6) return { kind: 'planet', starId, planetId, planetIndex };
   if (!MOON_NUMBER.test(moon)) return null;
   return { kind: 'moon', starId, planetId, moonId: id, planetIndex, moonIndex: Number(moon) - 1 };
 }
@@ -90,4 +102,12 @@ export function starIdOf(id: string): StarId | null {
 export function planetIdOf(id: BodyId): PlanetId | null {
   const parsed = parseId(id);
   return parsed && parsed.kind !== 'star' ? parsed.planetId : null;
+}
+
+/** Split a StarId into its block key and draw index (no validation beyond the last '.'). */
+export function splitStarId(id: StarId): { key: string; index: number } | null {
+  const dot = id.lastIndexOf('.');
+  if (dot <= 0) return null;
+  const index = Number(id.slice(dot + 1));
+  return Number.isInteger(index) && index >= 0 ? { key: id.slice(0, dot), index } : null;
 }

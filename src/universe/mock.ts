@@ -2,15 +2,19 @@
  * MOCK universe internals — the only module the facade (./index.ts) pulls data from.
  *
  * Contents:
- *  - Aurelia, the hand-authored home system (./mockHome.ts), in the sector containing
- *    `galaxy.params.homeLy`, at index 0 (it is the most luminous star of its sector by construction).
+ *  - Aurelia, the hand-authored home system (./mockHome.ts), at `galaxy.params.homeLy`; it is the
+ *    first star drawn in its catalogue cell, so its id ends in ".0".
  *  - ~300 local stars within MOCK_RADIUS_LY of home with solar-neighbourhood class proportions
- *    (M 74 %, K 12 %, G 7 %, F 3 %, A 1 %, plus giants, white dwarfs and one pulsar). Ids, sector
- *    indices (sorted by luminosity) and seeds follow ARCHITECTURE §6 exactly:
- *      sectorSeed = hash32(galaxySeed, sx, sy, sz),  starSeed = hash32(sectorSeed, i).
- *  - The supermassive black hole "0.0.0.0" at the galactic centre (reserved id).
+ *    (M 74 %, K 12 %, G 7 %, F 3 %, A 1 %, plus giants, white dwarfs and one pulsar).
+ *  - The supermassive black hole "8.0.0.0.0" at the galactic centre (reserved id).
  *  - Every star has a system: the home system, the black hole's (empty) one, or a small
  *    procedurally-perturbed variant (./mockBodies.ts).
+ *
+ * Catalogue layout follows src/universe/contracts.ts exactly: level = levelForAbsMag(M),
+ * cell = ⌊pos / cellSizeLy(level)⌋, index = draw order within the cell, and seeds follow the
+ * ARCHITECTURE §6 hierarchy with the level folded in:
+ *   cellSeed = hash32(galaxySeed, level, cx, cy, cz),  starSeed = hash32(cellSeed, index).
+ * Stars are also served as `StarBlock`s (one per occupied cell).
  *
  * The real generators (src/gen/stars, src/gen/systems) replace this file's internals; the
  * `MockCatalog` shape is what the facade needs from them.
@@ -23,6 +27,7 @@ import type {
   GalaxyModel,
   Rng,
   SpectralClass,
+  StarBlock,
   StarDetails,
   StarId,
   StarKind,
@@ -30,8 +35,9 @@ import type {
   StarSystem,
   Vec3Tuple,
 } from '../core/types';
-import { G_SI, SECONDS_PER_DAY, SECTOR_SIZE_LY, SOLAR_MASS_KG, SOLAR_RADIUS_KM, SPEED_OF_LIGHT_KMS } from '../core/units';
-import { formatStarId } from './ids';
+import { G_SI, SECONDS_PER_DAY, SOLAR_MASS_KG, SOLAR_RADIUS_KM, SPEED_OF_LIGHT_KMS } from '../core/units';
+import { CATALOG_LEVELS, cellSizeLy, levelForAbsMag, STAR_KINDS } from './contracts';
+import { formatBlockKey, formatStarId } from './ids';
 import { assembleSystem, buildProceduralSystem, createSystemContext } from './mockBodies';
 import { buildHomeSystem, HOME_STAR, HOME_STAR_NAME } from './mockHome';
 import { uniqueProperName } from './mockNames';
@@ -47,13 +53,17 @@ import {
 export const MOCK_RADIUS_LY = 80;
 /** Nearest allowed neighbour to Aurelia (the Sun's is 4.2 ly). */
 const MIN_HOME_DISTANCE_LY = 3.5;
-/** Sector (0,0,0) index 0 is reserved for the central supermassive black hole (ARCHITECTURE §6.2). */
-export const CORE_BLACK_HOLE_ID: StarId = '0.0.0.0';
+/** The galactic-core supermassive black hole: top level, cell (0,0,0), first star (types.ts). */
+export const CORE_BLACK_HOLE_ID: StarId = `${CATALOG_LEVELS - 1}.0.0.0.0`;
+const CORE_BLACK_HOLE_NAME = 'Ouroboros';
 
 export interface MockCatalog {
   /** Every star in the mock universe (home, locals and the core black hole). */
   readonly stars: readonly StarRecord[];
+  /** One block per occupied catalogue cell, keyed by `${level}.${cx}.${cy}.${cz}`. */
+  readonly blocks: ReadonlyMap<string, StarBlock>;
   readonly homeId: StarId;
+  readonly coreId: StarId;
   record(id: StarId): StarRecord | null;
   details(id: StarId): StarDetails | null;
   system(id: StarId): StarSystem | null;
@@ -176,19 +186,27 @@ function physicsFor(cls: MockClass, rng: Rng): StarPhysics {
   }
 }
 
-function sectorOf(pos: Vec3Tuple): [number, number, number] {
-  return [
-    Math.floor(pos[0] / SECTOR_SIZE_LY),
-    Math.floor(pos[1] / SECTOR_SIZE_LY),
-    Math.floor(pos[2] / SECTOR_SIZE_LY),
-  ];
+/** The supermassive black hole: r_s = 2GM/c²; the "star" we see is its hot accretion flow. */
+function coreBlackHolePhysics(): StarPhysics {
+  const massSolar = 4.1e6;
+  const radiusKm = (2 * G_SI * massSolar * SOLAR_MASS_KG) / (SPEED_OF_LIGHT_KMS * 1000) ** 2 / 1000;
+  return {
+    kind: 'black-hole',
+    spectralClass: 'X',
+    spectralType: 'SMBH',
+    massSolar,
+    radiusSolar: radiusKm / SOLAR_RADIUS_KM,
+    luminositySolar: 3e5, // a modestly active nucleus
+    temperatureK: 0,
+    absMag: -9, // bright enough for the top catalogue band
+  };
 }
 
 const signed = (n: number): string => (n < 0 ? `${n}` : `+${n}`);
 
-/** Catalogue designation, e.g. "SDR 812+0-3 7" (unambiguous with negative coordinates). */
-export function designationOf(sector: Vec3Tuple, index: number): string {
-  return `SDR ${sector[0]}${signed(sector[1])}${signed(sector[2])} ${index}`;
+/** Catalogue designation, e.g. "SDR 1/406+0-3/12" (level / cell / draw index; unambiguous signs). */
+export function designationOf(level: number, cell: Vec3Tuple, index: number): string {
+  return `SDR ${level}/${cell[0]}${signed(cell[1])}${signed(cell[2])}/${index}`;
 }
 
 // ───────────────────────────────────────────── Catalogue
@@ -196,23 +214,21 @@ export function designationOf(sector: Vec3Tuple, index: number): string {
 interface Draft {
   pos: Vec3Tuple;
   phys: StarPhysics;
-  cls: MockClass | 'home';
-  order: number;
+  cls: MockClass | 'home' | 'core';
 }
 
 export function createMockCatalog(galaxy: GalaxyModel): MockCatalog {
   const galaxySeed = galaxy.params.seed >>> 0;
   const home = galaxy.params.homeLy;
-  const homeSector = sectorOf(home);
-  const homeKey = homeSector.join('.');
   const homeL = HOME_STAR.luminositySolar;
   const homeT = effectiveTempK(homeL, HOME_STAR.radiusSolar);
 
+  // Draw order: the core black hole and home come first in their cells (index 0).
   const drafts: Draft[] = [
+    { pos: [0, 0, 0], cls: 'core', phys: coreBlackHolePhysics() },
     {
       pos: [home[0], home[1], home[2]],
       cls: 'home',
-      order: 0,
       phys: {
         kind: 'main-sequence',
         spectralClass: 'G',
@@ -232,74 +248,52 @@ export function createMockCatalog(galaxy: GalaxyModel): MockCatalog {
   const dir: [number, number, number] = [0, 0, 0];
   for (const cls of classes) {
     const phys = physicsFor(cls, rng);
-    let pos: Vec3Tuple = home;
-    for (let attempt = 0; attempt < 100; attempt++) {
-      sampleUnitVector(rng, dir);
-      const r = MOCK_RADIUS_LY * Math.cbrt(rng.next());
-      pos = [home[0] + dir[0] * r, home[1] + dir[1] * r, home[2] + dir[2] * r];
-      // Keep Aurelia the brightest star of its own sector so it stays index 0.
-      const clash = sectorOf(pos).join('.') === homeKey && phys.luminositySolar >= homeL;
-      if (r >= MIN_HOME_DISTANCE_LY && !clash) break;
-    }
-    drafts.push({ pos, phys, cls, order: drafts.length });
+    let r = 0;
+    while (r < MIN_HOME_DISTANCE_LY) r = MOCK_RADIUS_LY * Math.cbrt(rng.next()); // uniform in the ball
+    sampleUnitVector(rng, dir);
+    drafts.push({ pos: [home[0] + dir[0] * r, home[1] + dir[1] * r, home[2] + dir[2] * r], phys, cls });
   }
 
-  // Group by sector, sort each by luminosity (descending) → index.
-  const bySector = new Map<string, Draft[]>();
-  for (const d of drafts) {
-    const key = sectorOf(d.pos).join('.');
-    const list = bySector.get(key);
-    if (list) list.push(d);
-    else bySector.set(key, [d]);
-  }
-
-  const takenNames = new Set<string>([HOME_STAR_NAME.toLowerCase(), 'ouroboros']);
+  const takenNames = new Set<string>([HOME_STAR_NAME.toLowerCase(), CORE_BLACK_HOLE_NAME.toLowerCase()]);
   const records: StarRecord[] = [];
-  let homeId = '';
-  for (const list of bySector.values()) {
-    list.sort((a, b) => b.phys.luminositySolar - a.phys.luminositySolar || a.order - b.order);
-    list.forEach((d, index) => {
-      const sector = sectorOf(d.pos);
-      const id = formatStarId(sector[0], sector[1], sector[2], index);
-      const seed = hash32(hash32(galaxySeed, sector[0], sector[1], sector[2]), index);
-      const designation = designationOf(sector, index);
-      let name = designation;
-      if (d.cls === 'home') {
-        name = HOME_STAR_NAME;
-        homeId = id;
-      } else {
-        const nameRng = createRng(seed).fork('name');
-        const notable = d.cls !== 'M' || d.phys.absMag < 9 || nameRng.chance(0.2);
-        if (notable) name = uniqueProperName(nameRng, takenNames);
-      }
-      records.push({ id, sector, index, posLy: d.pos, seed, ...d.phys, colorRGB: blackbodyRGB(d.phys.temperatureK), name, designation });
+  const cellCounts = new Map<string, number>();
+  for (const d of drafts) {
+    const level = levelForAbsMag(d.phys.absMag);
+    const size = cellSizeLy(level);
+    const cell: Vec3Tuple = [Math.floor(d.pos[0] / size), Math.floor(d.pos[1] / size), Math.floor(d.pos[2] / size)];
+    const key = formatBlockKey(level, cell[0], cell[1], cell[2]);
+    const index = cellCounts.get(key) ?? 0;
+    cellCounts.set(key, index + 1);
+    const seed = hash32(hash32(galaxySeed, level, cell[0], cell[1], cell[2]), index);
+    const designation = designationOf(level, cell, index);
+    let name = designation;
+    if (d.cls === 'home') name = HOME_STAR_NAME;
+    else if (d.cls === 'core') name = CORE_BLACK_HOLE_NAME;
+    else {
+      const nameRng = createRng(seed).fork('name');
+      const notable = d.cls !== 'M' || d.phys.absMag < 9 || nameRng.chance(0.2);
+      if (notable) name = uniqueProperName(nameRng, takenNames);
+    }
+    records.push({
+      id: formatStarId(level, cell, index),
+      level,
+      cell,
+      index,
+      posLy: d.pos,
+      seed,
+      ...d.phys,
+      // The core's disk glows warm; everything else is its photosphere's blackbody colour.
+      colorRGB: blackbodyRGB(d.cls === 'core' ? 4200 : d.phys.temperatureK),
+      name,
+      designation,
     });
   }
-  if (!homeId.endsWith('.0')) throw new Error(`mock catalogue: home star is not index 0 (${homeId})`);
-
-  // The supermassive black hole at the galactic centre. r_s = 2GM/c².
-  const bhMass = 4.1e6;
-  const bhRadiusKm = (2 * G_SI * bhMass * SOLAR_MASS_KG) / (SPEED_OF_LIGHT_KMS * 1000) ** 2 / 1000;
-  records.push({
-    id: CORE_BLACK_HOLE_ID,
-    sector: [0, 0, 0],
-    index: 0,
-    posLy: [0, 0, 0],
-    seed: hash32(hash32(galaxySeed, 0, 0, 0), 0),
-    kind: 'black-hole',
-    spectralClass: 'X',
-    spectralType: 'SMBH',
-    massSolar: bhMass,
-    radiusSolar: bhRadiusKm / SOLAR_RADIUS_KM,
-    luminositySolar: 3000, // the hot accretion flow, not the hole
-    temperatureK: 0,
-    absMag: 2.5,
-    colorRGB: blackbodyRGB(4200), // warm glow of the accretion disk
-    name: 'Ouroboros',
-    designation: designationOf([0, 0, 0], 0),
-  });
+  const coreId = records[0].id;
+  const homeId = records[1].id;
+  if (coreId !== CORE_BLACK_HOLE_ID) throw new Error(`mock catalogue: core black hole got ${coreId}`);
 
   const byId = new Map(records.map((r) => [r.id, r]));
+  const blocks = buildBlocks(records);
   const detailCache = new Map<StarId, StarDetails>();
   const systemCache = new Map<StarId, StarSystem>();
 
@@ -320,7 +314,7 @@ export function createMockCatalog(galaxy: GalaxyModel): MockCatalog {
     if (!star) return null;
     let sys: StarSystem;
     if (id === homeId) sys = buildHomeSystem(star);
-    else if (id === CORE_BLACK_HOLE_ID) sys = coreSystem(star, galaxy.params.name);
+    else if (id === coreId) sys = coreSystem(star, galaxy.params.name);
     else sys = buildProceduralSystem(star);
     systemCache.set(id, sys);
     return sys;
@@ -328,11 +322,55 @@ export function createMockCatalog(galaxy: GalaxyModel): MockCatalog {
 
   return {
     stars: records,
+    blocks,
     homeId,
+    coreId,
     record: (id) => byId.get(id) ?? null,
     details,
     system,
   };
+}
+
+/** Group records (already in draw order) into struct-of-arrays blocks, one per cell. */
+function buildBlocks(records: readonly StarRecord[]): Map<string, StarBlock> {
+  const groups = new Map<string, StarRecord[]>();
+  for (const r of records) {
+    const key = formatBlockKey(r.level, r.cell[0], r.cell[1], r.cell[2]);
+    const list = groups.get(key);
+    if (list) list.push(r);
+    else groups.set(key, [r]);
+  }
+  const blocks = new Map<string, StarBlock>();
+  for (const [key, list] of groups) {
+    const { level, cell } = list[0];
+    const size = cellSizeLy(level);
+    const originLy: Vec3Tuple = [(cell[0] + 0.5) * size, (cell[1] + 0.5) * size, (cell[2] + 0.5) * size];
+    const n = list.length;
+    const block: StarBlock = {
+      key,
+      level,
+      cell,
+      originLy,
+      count: n,
+      offsetsLy: new Float32Array(n * 3),
+      absMag: new Float32Array(n),
+      luminositySolar: new Float32Array(n),
+      colorRGB: new Float32Array(n * 3),
+      kind: new Uint8Array(n),
+    };
+    for (const r of list) {
+      const i = r.index; // == position in `list`: records were emitted in draw order
+      for (let c = 0; c < 3; c++) {
+        block.offsetsLy[i * 3 + c] = r.posLy[c] - originLy[c];
+        block.colorRGB[i * 3 + c] = r.colorRGB[c];
+      }
+      block.absMag[i] = r.absMag;
+      block.luminositySolar[i] = r.luminositySolar;
+      block.kind[i] = STAR_KINDS.indexOf(r.kind);
+    }
+    blocks.set(key, block);
+  }
+  return blocks;
 }
 
 function homeDetails(rec: StarRecord): StarDetails {
@@ -345,6 +383,15 @@ function homeDetails(rec: StarRecord): StarDetails {
     activity: HOME_STAR.activity,
   };
 }
+
+/** [ageMin, ageMax] Gyr and [rotMin, rotMax] days per main-sequence class. */
+const MS_AGE_ROTATION: Readonly<Record<string, readonly [number, number, number, number]>> = {
+  M: [0.5, 10, 0.5, 100],
+  K: [1, 10, 10, 45],
+  G: [1, 9, 15, 35],
+  F: [0.8, 4, 2, 10],
+  A: [0.1, 0.9, 0.5, 2],
+};
 
 function starDetails(rec: StarRecord): StarDetails {
   const rng = createRng(rec.seed).fork('details');
@@ -373,34 +420,22 @@ function starDetails(rec: StarRecord): StarDetails {
     case 'subgiant':
       return { ...base, ageGyr: rng.range(1.5, 9), rotationPeriodDays: rng.range(100, 700), activity: rng.range(0.02, 0.1) };
     case 'main-sequence': {
-      const range: Readonly<Record<string, readonly [number, number, number, number]>> = {
-        // [ageMin, ageMax, rotMin, rotMax]
-        M: [0.5, 10, 0.5, 100],
-        K: [1, 10, 10, 45],
-        G: [1, 9, 15, 35],
-        F: [0.8, 4, 2, 10],
-        A: [0.1, 0.9, 0.5, 2],
-      };
-      const [a0, a1, r0, r1] = range[rec.spectralClass] ?? [0.1, 1, 1, 5];
+      const [a0, a1, r0, r1] = MS_AGE_ROTATION[rec.spectralClass] ?? [0.1, 1, 1, 5];
       const ageGyr = rng.range(a0, a1);
       const young = ageGyr < 2;
-      const activity =
-        rec.spectralClass === 'M'
-          ? young
-            ? rng.range(0.6, 1)
-            : rng.range(0.15, 0.5)
-          : rng.range(0.03, young ? 0.5 : 0.3);
+      let activity: number;
+      if (rec.spectralClass === 'M') activity = young ? rng.range(0.6, 1) : rng.range(0.15, 0.5);
+      else activity = rng.range(0.03, young ? 0.5 : 0.3);
       return { ...base, ageGyr, rotationPeriodDays: logRange(rng, r0, r1), activity };
     }
   }
 }
 
 function coreSystem(star: StarDetails, galaxyName: string): StarSystem {
-  const ctx = createSystemContext(star);
-  return assembleSystem(ctx, [], [], [0, 0, 0, 1], {
+  return assembleSystem(createSystemContext(star), [], [], [0, 0, 0, 1], {
     blurb:
       `Four million suns' worth of nothing, wrapped in a disk of gas heated to glowing. Everything in ` +
-      `${galaxyName} turns around Ouroboros; nothing that falls in has ever filed a review.`,
+      `${galaxyName} turns around ${CORE_BLACK_HOLE_NAME}; nothing that fell in has ever filed a review.`,
     surveyRating: 5,
     tags: ['supermassive black hole', 'galactic centre', 'accretion disk'],
   });

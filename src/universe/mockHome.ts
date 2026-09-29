@@ -112,6 +112,7 @@ const PLANETS: readonly PlanetSpec[] = [
     volcanism: 0.2,
     craterDensity: 0.03,
     life: 'vegetation',
+    appearance: { cloudCoverage: 0.52 },
     rings: null,
     moons: [
       {
@@ -125,6 +126,10 @@ const PLANETS: readonly PlanetSpec[] = [
         iceCoverage: 0.005,
         volcanism: 0.02,
         craterDensity: 0.9,
+        blurb:
+          "Halcyon's only moon: a cratered grey lantern big enough to raise real tides and bright enough " +
+          'to read by. Nobody has, yet.',
+        surveyRating: 3,
       },
     ],
     blurb:
@@ -192,6 +197,20 @@ const PLANETS: readonly PlanetSpec[] = [
         iceCoverage: 0.05,
         volcanism: 1,
         craterDensity: 0,
+        appearance: {
+          surfaceColors: [
+            [0.72, 0.6, 0.18],
+            [0.55, 0.32, 0.08],
+            [0.85, 0.82, 0.62],
+            [0.12, 0.1, 0.06],
+          ],
+          lavaGlow: 0.55,
+          swatch: [0.7, 0.6, 0.25],
+        },
+        blurb:
+          'Tidally kneaded by its giant parent until its insides melt, this is the most volcanic place in ' +
+          'the system: sulfur plumes, lava lakes and a fresh coat of paint every few years.',
+        surveyRating: 4.5,
       },
       {
         ...HOME_MOON_DEFAULTS,
@@ -204,6 +223,18 @@ const PLANETS: readonly PlanetSpec[] = [
         iceCoverage: 1,
         volcanism: 0.15,
         craterDensity: 0.05,
+        appearance: {
+          surfaceColors: [
+            [0.8, 0.78, 0.72],
+            [0.62, 0.55, 0.45],
+            [0.45, 0.28, 0.15],
+          ],
+          swatch: [0.75, 0.72, 0.66],
+        },
+        blurb:
+          'A white, cracked shell of ice over a salty ocean kept liquid by tidal flexing. The best bet for ' +
+          'life elsewhere in the system; nobody has checked.',
+        surveyRating: 4,
       },
       {
         ...HOME_MOON_DEFAULTS,
@@ -219,6 +250,17 @@ const PLANETS: readonly PlanetSpec[] = [
         iceCoverage: 0.6,
         volcanism: 0.05,
         craterDensity: 0.1,
+        appearance: {
+          surfaceColors: [
+            [0.3, 0.22, 0.12],
+            [0.45, 0.35, 0.2],
+          ],
+          swatch: [0.75, 0.5, 0.22],
+        },
+        blurb:
+          'A world wrapped in orange smog, with methane drizzle and lakes of liquid ethane. The air is thick ' +
+          'enough to fly in on cardboard wings; the cold is the problem.',
+        surveyRating: 4.5,
       },
       {
         ...HOME_MOON_DEFAULTS,
@@ -231,6 +273,10 @@ const PLANETS: readonly PlanetSpec[] = [
         iceCoverage: 0.25,
         volcanism: 0,
         craterDensity: 1,
+        blurb:
+          'The most heavily cratered surface in the system: a four-billion-year record of everything that ' +
+          'ever went wrong nearby.',
+        surveyRating: 2.5,
       },
     ],
     blurb:
@@ -271,6 +317,18 @@ const PLANETS: readonly PlanetSpec[] = [
         iceCoverage: 0.95,
         volcanism: 0.2,
         craterDensity: 0.1,
+        appearance: {
+          surfaceColors: [
+            [0.75, 0.68, 0.64],
+            [0.6, 0.55, 0.52],
+            [0.42, 0.33, 0.3],
+          ],
+          swatch: [0.72, 0.66, 0.62],
+        },
+        blurb:
+          'Orbits backwards, spouts nitrogen geysers and is slowly spiralling inwards: a captured wanderer ' +
+          'that never quite settled in.',
+        surveyRating: 4,
       },
       {
         ...HOME_MOON_DEFAULTS,
@@ -283,6 +341,10 @@ const PLANETS: readonly PlanetSpec[] = [
         iceCoverage: 0.4,
         volcanism: 0,
         craterDensity: 0.85,
+        blurb:
+          'A small, lopsided iceball on a tilted, eccentric orbit: the kind of moon you forget about until ' +
+          'it eclipses something.',
+        surveyRating: 2,
       },
     ],
     blurb:
@@ -310,6 +372,14 @@ const PLANETS: readonly PlanetSpec[] = [
     volcanism: 0.05,
     craterDensity: 0.4,
     life: 'none',
+    appearance: {
+      surfaceColors: [
+        [0.75, 0.68, 0.58],
+        [0.45, 0.25, 0.12],
+        [0.62, 0.55, 0.48],
+      ],
+      swatch: [0.66, 0.56, 0.46],
+    },
     rings: null,
     moons: [],
     blurb:

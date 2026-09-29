@@ -20,7 +20,14 @@ function signatures(glsl: string): string[] {
   return [...noComments.matchAll(re)].map(([, name, params = '']) => {
     const types = params
       .split(',')
-      .map((p) => p.trim().split(/\s+/).slice(0, -1).filter((w) => !['const', 'in', 'out', 'inout', 'highp', 'mediump', 'lowp'].includes(w)).join(' '))
+      .map((p) =>
+        p
+          .trim()
+          .split(/\s+/)
+          .slice(0, -1)
+          .filter((w) => !['const', 'in', 'out', 'inout', 'highp', 'mediump', 'lowp'].includes(w))
+          .join(' '),
+      )
       .filter(Boolean);
     return `${name}(${types.join(',')})`;
   });
@@ -74,7 +81,17 @@ describe('GLSL chunks', () => {
         'blackbody',
         'adjustSaturation',
       ],
-      hash: ['pcg', 'pcg2d', 'pcg3d', 'pcg4d', 'uintToUnit', 'hash11', 'hash12', 'hash33', 'hash44'],
+      hash: [
+        'pcg',
+        'pcg2d',
+        'pcg3d',
+        'pcg4d',
+        'uintToUnit',
+        'hash11',
+        'hash12',
+        'hash33',
+        'hash44',
+      ],
       simplex: ['snoise', 'snoiseGrad', 'mod289', 'permute', 'taylorInvSqrt', 'grad4'],
       noise: ['fbm', 'fbmGrad', 'ridged', 'worley', 'domainWarp', 'snoise', 'pcg3d'],
     };

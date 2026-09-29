@@ -12,23 +12,43 @@ import type {
   Planet,
   SearchResult,
   SelectionRef,
+  StarBlock,
   StarDetails,
   StarId,
   StarRecord,
   StarSystem,
   Vec3Tuple,
 } from '../core/types';
+import { LY_PER_PC } from '../core/units';
 import { formatLy } from '../core/format';
 import { hash32, hashString } from '../core/hash';
 import { createGalaxyModel } from '../gen/galaxy/model';
-import type { BodyLookup, RandomStarKind, StarQueryOptions, Universe } from './contracts';
+import {
+  type BlockQuery,
+  type BlockQueryResult,
+  type BodyLookup,
+  cellSizeLy,
+  LEVEL_BAND_MAG,
+  LEVEL0_BRIGHT_EDGE_MAG,
+  type RandomStarKind,
+  type StarQueryOptions,
+  type Universe,
+} from './contracts';
 import { parseId, starIdOf } from './ids';
-import { CORE_BLACK_HOLE_ID, createMockCatalog, type MockCatalog } from './mock';
+import { createMockCatalog, type MockCatalog } from './mock';
 import { planetTypeLabel } from './mockBodies';
 import { apparentMag } from './mockPhysics';
 
-export type { BodyLookup, RandomStarKind, StarQueryOptions, Universe } from './contracts';
+export type {
+  BlockQuery,
+  BlockQueryResult,
+  BodyLookup,
+  RandomStarKind,
+  StarQueryOptions,
+  Universe,
+} from './contracts';
 export {
+  formatBlockKey,
   formatMoonId,
   formatPlanetId,
   formatStarId,
@@ -37,13 +57,14 @@ export {
   parseId,
   planetIdOf,
   planetLetter,
+  splitStarId,
   starIdOf,
 } from './ids';
 
 /** The galaxy everyone starts in (the date this project began, 2026-09-29). */
 export const DEFAULT_GALAXY_SEED = 20260929;
 
-const DEFAULT_QUERY_LIMIT = 20_000;
+const DEFAULT_QUERY_LIMIT = 5000;
 const DEFAULT_SEARCH_LIMIT = 10;
 
 const universes = new Map<number, Universe>();
@@ -105,6 +126,10 @@ class MockUniverse implements Universe {
     this.home = this.catalog.record(this.catalog.homeId) as StarRecord;
   }
 
+  getRecord(id: StarId): StarRecord | null {
+    return this.catalog.record(id);
+  }
+
   getStar(id: StarId): StarDetails | null {
     return parseId(id)?.kind === 'star' ? this.catalog.details(id) : null;
   }
@@ -124,17 +149,41 @@ class MockUniverse implements Universe {
     return moon ? { system, planet, moon } : null;
   }
 
+  /**
+   * Cells of every catalogue level that can hold a star brighter than `magnitudeLimit` as seen from
+   * the observer: a level's brightest member (band edge M_b) is visible out to
+   * d = 10 pc · 10^((m_lim − M_b)/5), so we return the cells whose box intersects that sphere
+   * (≈ 3×3×3 per level by construction of the cell sizes). The mock has no generation to slice.
+   */
+  queryBlocks(q: BlockQuery): BlockQueryResult {
+    const [ox, oy, oz] = q.observerLy;
+    const blocks: StarBlock[] = [];
+    for (const block of this.catalog.blocks.values()) {
+      const brightEdge = LEVEL0_BRIGHT_EDGE_MAG - block.level * LEVEL_BAND_MAG;
+      const reachLy = 10 * LY_PER_PC * 10 ** ((q.magnitudeLimit - brightEdge) / 5);
+      const size = cellSizeLy(block.level);
+      // Distance from the observer to the cell's box (0 inside).
+      let d2 = 0;
+      const o = [ox, oy, oz];
+      for (let a = 0; a < 3; a++) {
+        const lo = block.cell[a] * size;
+        const v = o[a] < lo ? lo - o[a] : o[a] > lo + size ? o[a] - lo - size : 0;
+        d2 += v * v;
+      }
+      if (d2 <= reachLy * reachLy) blocks.push(block);
+    }
+    blocks.sort((a, b) => a.level - b.level || (a.key < b.key ? -1 : 1));
+    return { blocks, pending: 0 };
+  }
+
   queryStars(centerLy: Vec3Tuple, radiusLy: number, opts: StarQueryOptions = {}): StarRecord[] {
     const limit = opts.limit ?? DEFAULT_QUERY_LIMIT;
     const observer = opts.observerLy ?? centerLy;
-    const magnitudeLimited = opts.magnitudeLimit !== undefined && opts.observerLy !== undefined;
-    const complete = opts.completeRadiusLy ?? 0;
     const hits: { star: StarRecord; mag: number }[] = [];
     for (const star of this.catalog.stars) {
       if (dist(star.posLy, centerLy) > radiusLy) continue;
-      const d = dist(star.posLy, observer);
-      const mag = apparentMag(star.absMag, d);
-      if (magnitudeLimited && mag >= (opts.magnitudeLimit as number) && d > complete) continue;
+      const mag = apparentMag(star.absMag, dist(star.posLy, observer));
+      if (opts.magnitudeLimit !== undefined && mag >= opts.magnitudeLimit) continue;
       hits.push({ star, mag });
     }
     hits.sort((a, b) => a.mag - b.mag); // brightest-apparent first
@@ -158,6 +207,10 @@ class MockUniverse implements Universe {
 
   homeStarId(): StarId {
     return this.catalog.homeId;
+  }
+
+  coreStarId(): StarId {
+    return this.catalog.coreId;
   }
 
   randomStarId(kind: RandomStarKind, seed: number): StarId {
@@ -199,7 +252,7 @@ class MockUniverse implements Universe {
     return results.slice(0, limit);
   }
 
-  remember(id: StarId): void {
+  remember(id: StarId | BodyId): void {
     const starId = starIdOf(id);
     if (!starId || !this.catalog.record(starId) || this.remembered.has(starId)) return;
     this.remembered.add(starId);
@@ -286,7 +339,7 @@ class MockUniverse implements Universe {
   private candidatesFor(kind: RandomStarKind): StarId[] {
     const cached = this.candidates.get(kind);
     if (cached) return cached;
-    const local = this.catalog.stars.filter((s) => s.id !== CORE_BLACK_HOLE_ID);
+    const local = this.catalog.stars.filter((s) => s.id !== this.catalog.coreId);
     const planetsOf = (id: StarId): readonly Planet[] => this.catalog.system(id)?.planets ?? [];
     let pool: StarRecord[];
     switch (kind) {

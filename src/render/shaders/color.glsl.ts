@@ -24,22 +24,34 @@ vec3 linearToSrgb(vec3 c) {
 }
 
 /**
- * CIE 1931 xy chromaticity of a blackbody (Planckian locus), cubic-spline approximation of
- * Kim et al. 2002 ("Design of advanced color temperature control system for HDTV applications",
- * J. Korean Phys. Soc. 41(6)). Valid 1667 K - 25000 K; the input is clamped to that range.
+ * CIE 1931 xy chromaticity of a blackbody (the Planckian locus), for T >= 1000 K (clamped below).
+ * - 1667 K and up: cubic fits of Kim et al. 2002 ("Design of advanced color temperature control
+ *   system for HDTV applications", J. Korean Phys. Soc. 41(6)), fitted to 25000 K. Being polynomials
+ *   in 1/T they converge on the T -> infinity end of the locus (within ~1e-3), so O stars need no clamp.
+ * - 1000-1667 K (lava, brown dwarfs): quadratic least-squares fit in 1/T, |dxy| < 1e-3, to Planck's
+ *   law integrated against the CIE 1931 CMFs (as in src/core/color.ts), blended to meet the Kim
+ *   curve at 1667 K so the locus stays continuous.
  */
 vec2 planckianLocusXy(float tempK) {
-  float t = 1000.0 / clamp(tempK, 1667.0, 25000.0);
+  float T = max(tempK, 1000.0);
+  float t = 1000.0 / T;
+  if (T < 1667.0) {
+    float blend = clamp((1.0 - t) * 2.5, 0.0, 1.0); // 0 at 1000 K, 1 at 1667 K
+    return vec2(
+      0.2875423 + t * (0.6129027 - 0.2591297 * t) + 0.0026773 * blend,
+      0.5056867 + t * (-0.1857152 + 0.0344795 * t) - 0.0038004 * blend
+    );
+  }
   float t2 = t * t;
   float t3 = t2 * t;
-  float x = tempK < 4000.0
+  float x = T < 4000.0
     ? -0.2661239 * t3 - 0.2343589 * t2 + 0.8776956 * t + 0.179910
     : -3.0258469 * t3 + 2.1070379 * t2 + 0.2226347 * t + 0.240390;
   float x2 = x * x;
   float x3 = x2 * x;
-  float y = tempK < 2222.0
+  float y = T < 2222.0
     ? -1.1063814 * x3 - 1.34811020 * x2 + 2.18555832 * x - 0.20219683
-    : tempK < 4000.0
+    : T < 4000.0
       ? -0.9549476 * x3 - 1.37418593 * x2 + 2.09137015 * x - 0.16748867
       : 3.0817580 * x3 - 5.87338670 * x2 + 3.75112997 * x - 0.37001483;
   return vec2(x, y);

@@ -21,7 +21,7 @@ const GRAD3 = new Float64Array([
   -1,
 ]);
 
-/** Seeded 3D simplex noise, range ≈ [−1, 1], zero at lattice points, feature size ≈ 1 unit. */
+/** Seeded 3D simplex noise: range ≈ [−1, 1], mean 0, feature size ≈ 1 unit. */
 export function createNoise3(seed: number): Noise3 {
   const source: number[] = [];
   for (let i = 0; i < 256; i++) source.push(i);

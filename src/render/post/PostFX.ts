@@ -257,13 +257,21 @@ export class PostFX {
     this.exposure = exposure;
   }
 
+  getVignette(): boolean {
+    return this.vignette;
+  }
+
   setVignette(enabled: boolean): void {
     if (enabled === this.vignette) return;
     this.vignette = enabled;
     this.rebuild();
   }
 
-  /** Film grain amplitude, 0 disables (the pass stays; the cost is two hashes per pixel). */
+  getGrain(): number {
+    return this.grainEffect.amount;
+  }
+
+  /** Film grain amplitude, 0 disables (the effect stays merged in the final pass; it is cheap). */
   setGrain(amount: number): void {
     this.grainEffect.amount = amount;
   }

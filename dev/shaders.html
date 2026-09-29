@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>GLSL chunks</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Compiles every src/render/shaders chunk (raw WebGL2, three.js, merged postprocessing effects) and checks the maths numerically on the GPU."
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #05070c;
+        color: #d7dde8;
+        color-scheme: dark;
+        font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      #report {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 20px 24px 40px;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 15px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: #f1d9a0;
+      }
+      .summary {
+        margin: 0 0 16px;
+      }
+      .good {
+        color: #8fd6a4;
+      }
+      .bad {
+        color: #ff8f8f;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th {
+        text-align: left;
+        padding: 14px 8px 4px;
+        color: #8da2c0;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        border-bottom: 1px solid #1d2636;
+      }
+      td {
+        padding: 4px 8px;
+        vertical-align: top;
+        border-bottom: 1px solid #111827;
+        white-space: pre-wrap;
+      }
+      td:first-child {
+        width: 3.5em;
+        font-weight: 600;
+      }
+      td:nth-child(2) {
+        width: 20em;
+      }
+      tr.ok td:first-child {
+        color: #8fd6a4;
+      }
+      tr.fail td {
+        color: #ff8f8f;
+      }
+      td:last-child {
+        color: #93a1b7;
+        font-variant-numeric: tabular-nums;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="report"></main>
+    <script type="module" src="./shaders.ts"></script>
+  </body>
+</html>
