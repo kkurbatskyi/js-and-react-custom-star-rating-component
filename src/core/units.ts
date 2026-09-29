@@ -29,18 +29,6 @@ export const JUPITER_RADIUS_KM = 69_911;
  */
 export const SECTOR_SIZE_LY = 32;
 
-// ───────────────────────────────────────────── Mass
-
-/** Solar mass (IAU 2015: GM☉ / G). */
-export const SOLAR_MASS_KG = 1.988_47e30;
-export const EARTH_MASS_KG = 5.9722e24;
-export const JUPITER_MASS_EARTH = 317.83;
-export const JUPITER_MASS_KG = JUPITER_MASS_EARTH * EARTH_MASS_KG;
-/** ≈ 332 946 */
-export const SOLAR_MASS_EARTH = SOLAR_MASS_KG / EARTH_MASS_KG;
-/** ≈ 1047.6 */
-export const SOLAR_MASS_JUPITER = SOLAR_MASS_KG / JUPITER_MASS_KG;
-
 // ───────────────────────────────────────────── Stellar
 
 /** Nominal solar effective temperature (IAU 2015). */
@@ -68,6 +56,26 @@ export const MOLAR_GAS_CONSTANT = 8.314_462_618;
 export const BOLTZMANN_SI = 1.380_649e-23;
 /** Atomic mass unit (CODATA 2018), kg. */
 export const ATOMIC_MASS_UNIT_KG = 1.660_539_066_6e-27;
+
+// ───────────────────────────────────────────── Mass
+//
+// Masses are derived from the IAU 2015 nominal mass PARAMETERS GM (known to 10 digits, far better
+// than G itself), so that G_SI × mass reproduces GM exactly and Kepler's third law is consistent.
+
+/** Nominal solar mass parameter (GM)☉ (IAU 2015 B3), m³ s⁻². */
+export const GM_SUN_SI = 1.327_124_4e20;
+/** Nominal terrestrial mass parameter (GM)⊕ (IAU 2015 B3), m³ s⁻². */
+export const GM_EARTH_SI = 3.986_004e14;
+/** ≈ 1.98841e30 kg */
+export const SOLAR_MASS_KG = GM_SUN_SI / G_SI;
+/** ≈ 5.97217e24 kg */
+export const EARTH_MASS_KG = GM_EARTH_SI / G_SI;
+export const JUPITER_MASS_EARTH = 317.83;
+export const JUPITER_MASS_KG = JUPITER_MASS_EARTH * EARTH_MASS_KG;
+/** ≈ 332 946 */
+export const SOLAR_MASS_EARTH = GM_SUN_SI / GM_EARTH_SI;
+/** ≈ 1047.6 */
+export const SOLAR_MASS_JUPITER = SOLAR_MASS_EARTH / JUPITER_MASS_EARTH;
 
 // ───────────────────────────────────────────── Time
 

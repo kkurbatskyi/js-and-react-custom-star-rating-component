@@ -2,25 +2,23 @@
  * Planet atmosphere — STUB (integration phase). The atmosphere specialist replaces this with a
  * real scattering shell; the factory signature and `IAtmosphereShell` stay.
  *
- * A slightly larger sphere drawn with a view-dependent (fresnel-like) limb glow, tinted by the
- * dominant gases and lit from `sunDirection` with a soft terminator. Premultiplied alpha.
+ * A slightly larger sphere with a view-dependent limb glow tinted by `appearance.hazeColor`, lit
+ * from `sunDirection` with a soft terminator. Premultiplied alpha, RENDER_ORDER.atmosphere;
+ * `intensity` is used as opacity.
  *
  * Composition contract (shared by all planet sub-components): the returned `object` is added to
  * the PlanetVisual's root group, which already carries `positionKm` and `orientation`. Work in
  * body-fixed km (Y = spin axis) and do NOT apply positionKm/orientation to `object` yourself.
  */
-import {
-  Color,
-  GLSL3,
-  Mesh,
-  NormalBlending,
-  ShaderMaterial,
-  SphereGeometry,
-  Uniform,
-  Vector3,
-} from 'three';
+import { Color, GLSL3, Mesh, NormalBlending, ShaderMaterial, SphereGeometry, Uniform, Vector3 } from 'three';
 import type { BodyBase, StarSystem } from '../../../core/types';
-import type { IAtmosphereShell, PlanetUniforms, Quality, VisualFrame } from '../../contracts';
+import {
+  type IAtmosphereShell,
+  type PlanetUniforms,
+  type Quality,
+  RENDER_ORDER,
+  type VisualFrame,
+} from '../../contracts';
 import { common } from '../../shaders/common.glsl';
 
 /** Below this surface pressure the shell is skipped entirely. */
@@ -59,22 +57,9 @@ void main() {
   float rim = pow(1.0 - mu, 4.0) * smoothstep(0.0, 0.3, mu) * 2.2 + 0.04;
   float day = smoothstep(-0.25, 0.35, dot(n, uSunDir));
   float a = saturate(rim * day * uStrength) * uIntensity;
-  vec3 c = uColor * uSunColor * uSunIntensity * a;
-  fragColor = vec4(c, a); // premultiplied
+  fragColor = vec4(uColor * uSunColor * (uSunIntensity * a), a); // premultiplied
 }
 `;
-
-/** Rough sky tint from composition and pressure (linear sRGB). */
-function atmosphereTint(body: BodyBase): [number, number, number] {
-  const atm = body.atmosphere;
-  if (!atm) return [0, 0, 0];
-  const frac = (gas: string) => atm.composition.find((c) => c.gas === gas)?.fraction ?? 0;
-  if (frac('H₂') > 0.5) return frac('CH₄') > 0.015 ? [0.42, 0.78, 1] : [0.8, 0.82, 0.95];
-  if (frac('CH₄') > 0.02 && frac('N₂') > 0.5) return [1, 0.58, 0.25]; // tholin haze
-  if (frac('CO₂') > 0.5) return atm.surfacePressureAtm > 5 ? [1, 0.84, 0.55] : [0.95, 0.62, 0.45];
-  if (frac('Na') > 0.2 || frac('SiO') > 0.2) return [1, 0.72, 0.42];
-  return [0.32, 0.56, 1]; // Rayleigh blue
-}
 
 class AtmosphereShell implements IAtmosphereShell {
   readonly object: Mesh<SphereGeometry, ShaderMaterial>;
@@ -87,16 +72,12 @@ class AtmosphereShell implements IAtmosphereShell {
     uIntensity: new Uniform(1),
   };
 
-  constructor(body: BodyBase, quality: Quality) {
-    const atm = body.atmosphere as NonNullable<BodyBase['atmosphere']>;
-    const [r, g, b] = atmosphereTint(body);
-    this.uniforms.uColor.value.setRGB(r, g, b);
-    this.uniforms.uStrength.value = Math.min(
-      1.4,
-      0.55 + 0.3 * Math.log10(1 + atm.surfacePressureAtm * 9),
-    );
+  constructor(body: BodyBase, pressureAtm: number, scaleHeightKm: number, quality: Quality) {
+    const haze = body.appearance.hazeColor ?? [0.32, 0.56, 1];
+    this.uniforms.uColor.value.setRGB(haze[0], haze[1], haze[2]);
+    this.uniforms.uStrength.value = Math.min(1.4, 0.55 + 0.3 * Math.log10(1 + pressureAtm * 9));
     // ~6 scale heights, clamped so the rim stays visible but never balloons.
-    const thickness = Math.min(0.05, Math.max(0.015, (6 * atm.scaleHeightKm) / body.radiusKm));
+    const thickness = Math.min(0.05, Math.max(0.015, (6 * scaleHeightKm) / body.radiusKm));
     const segments = SEGMENTS[quality];
     this.object = new Mesh(
       new SphereGeometry(1, segments, segments / 2),
@@ -112,7 +93,9 @@ class AtmosphereShell implements IAtmosphereShell {
         toneMapped: false,
       }),
     );
-    this.object.scale.setScalar(body.radiusKm * (1 + thickness));
+    const r = body.radiusKm * (1 + thickness);
+    this.object.scale.set(r, r * (1 - body.oblateness), r);
+    this.object.renderOrder = RENDER_ORDER.atmosphere;
     this.object.name = 'atmosphere';
   }
 
@@ -131,11 +114,8 @@ class AtmosphereShell implements IAtmosphereShell {
 }
 
 /** A limb-glow shell for bodies with a meaningful atmosphere, else null. */
-export function createAtmosphere(
-  body: BodyBase,
-  _system: StarSystem,
-  quality: Quality,
-): IAtmosphereShell | null {
-  if (!body.atmosphere || body.atmosphere.surfacePressureAtm < MIN_PRESSURE_ATM) return null;
-  return new AtmosphereShell(body, quality);
+export function createAtmosphere(body: BodyBase, _system: StarSystem, quality: Quality): IAtmosphereShell | null {
+  const atm = body.atmosphere;
+  if (!atm || atm.surfacePressureAtm < MIN_PRESSURE_ATM || !body.appearance.hazeColor) return null;
+  return new AtmosphereShell(body, atm.surfacePressureAtm, atm.scaleHeightKm, quality);
 }

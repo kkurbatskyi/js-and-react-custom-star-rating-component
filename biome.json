@@ -65,6 +65,11 @@
       },
       "suspicious": {
         "noExplicitAny": "error",
+        "noMisrefactoredShorthandAssign": "off",
+        "useIterableCallbackReturn": {
+          "level": "error",
+          "options": { "checkForEach": false }
+        },
         "noConsole": {
           "level": "warn",
           "options": { "allow": ["warn", "error", "info", "debug", "group", "groupEnd", "table"] }
