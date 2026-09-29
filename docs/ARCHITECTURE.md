@@ -85,7 +85,16 @@ Every module directory gets a short `README.md`: public API, design notes, known
 - `StarSystem.eclipticToGalactic` rotates S-vectors into G axes (each system has its own tilt — the galaxy's band crosses a system's sky at an angle, like the Milky Way does ours).
 - JS numbers are float64 — **all CPU math is double precision** (`THREE.Vector3` is fine on the CPU). Precision is lost only when values reach the GPU as float32.
 - **Camera-relative rendering** (see `src/render/contracts.ts`): each layer camera is at the origin; objects are placed at `(objectPos − cameraPos)` computed in float64 and rotated into layer world axes (G-aligned). Geometry vertices stay small relative to their object origin.
-- Hierarchical camera position: when inside a system, the authoritative camera position is `(systemId, systemKm)`; `galacticLy = star.posLy + rotate(eclipticToGalactic, systemKm) / KM_PER_LY` is derived for the galaxy/starfield layers. Outside systems, `galacticLy` is authoritative.
+- **Authoritative camera state = `(focus, focusOffsetKm)`**: the offset from the focus target's centre in km
+  (float64, galactic axes). Everything else is derived per frame: `systemKm` (focus position in S + offset rotated
+  into S) for in-system layers, `galacticLy` (focus galactic position + offset / KM_PER_LY) for galaxy/starfield.
+  Precision is therefore always relative to what you're looking at.
+- `systemId` is only ever the focus star or a flight endpoint, active while the camera is inside that system's
+  `StarSystem.radiusKm` (with enter/exit hysteresis). One shared `levelFor()` in the engine decides the ViewLevel.
+- Body orientation conventions (spin axis, `axialAzimuthRad`) are defined once in `src/sim/orientation.ts` — use
+  its helpers (`equatorialFrame`, `bodyOrientation`, `moonPositionKm`, `bodyPositionKm`), never re-derive.
+- **Time precision**: never pass raw `simDays` to a shader (float32 ≈ 84 s resolution at today's J2000 offset).
+  Pass phases computed in float64 on the CPU, or `simDays − epoch` with a per-visual epoch.
 - Physical constants: `src/core/units.ts` (`KM_PER_AU`, `KM_PER_LY`, `SOLAR_RADIUS_KM`, …). Never hard-code them elsewhere.
 
 ## 5. Render pipeline
@@ -113,8 +122,28 @@ Every module directory gets a short `README.md`: public API, design notes, known
 - Exposure is fixed at 1.0 (the engine may add mild auto-exposure later — do not bake exposure into shaders).
 - Colours from data (`colorRGB`, palettes) are linear. Use `src/core/color.ts` for blackbody conversion.
 
-**Transitions** are cross-fades driven by camera distance, passed to visuals as `intensity`/`opacity`
-(0..1): e.g. a star's point sprite (starfield) fades out as its StarVisual (system layer) fades in.
+**Depth slices**: a layer may return several `LayerRenderSpec` slices (far→near, depth cleared between, optional
+per-slice scene) so each gets a tight near/far — e.g. focused on a moon at 1 km altitude while its ringed giant
+fills the sky 1.2e6 km away. The planet layer owns the focus's local group (parent, rings, siblings, moons); the
+system layer skips those bodies. No logarithmic depth buffer.
+
+**Transitions & hand-offs** — no pops, ever:
+- Star: the starfield hides the focus star as the camera enters its system; the system layer's StarVisual draws it
+  at every distance inside the system (a point source when unresolved, a sphere when resolved). Both use the
+  shared photometry `src/render/starfield/photometry.ts` — `pointSource(luminositySolar, distanceKm,
+  pixelsPerRadian) → { peakHdr, radiusPx }` — so brightness and size match exactly at the hand-off.
+- Planets: every body has a cheap `'lite'` visual; the focus body gets a `'full'` visual whose GPU bakes are
+  time-sliced via `prepare(renderer, budgetMs)`; the engine switches lite → full only once `ready`, at a
+  projected-size threshold with hysteresis. Full bakes are kept for ~3 bodies (LRU).
+- Opaque bodies interpret `intensity` as a brightness multiplier, never alpha.
+
+**Transparency order inside a planet** (`RENDER_ORDER` in src/render/contracts.ts): surface (opaque) → far half of
+the rings → clouds → atmosphere → near half of the rings. Shells share a centre, so three.js cannot sort them —
+set `renderOrder` explicitly. Atmospheres ideally composite `dst·T_rgb + inscatter` (a multiply pass + an add
+pass) so a star seen through the limb reddens.
+
+**Picking & labels across layers**: nearer layers report screen-space `occluders` (planet/star discs); picks and
+labels of farther layers inside a disc are discarded. Label priority = `LabelTier × 1000 + rank`.
 
 ## 6. Procedural generation
 
@@ -138,13 +167,23 @@ Cylindrical R = √(x²+z²), θ = atan2(z, x).
 - `youngFraction` tracks arms (blue OB associations, pink HII knots); `bulgeFraction` the old yellow-orange core.
 - Calibration: `stellarDensity ≈ 0.004 stars/ly³` at R ≈ 26 kly midplane between arms (≈ solar neighbourhood).
 
-### 6.2 Star catalogue (`src/gen/stars`)
-- Cubic sectors of `SECTOR_SIZE_LY` (32 ly). Star count ~ Poisson(density × volume), capped per sector (~4096).
+### 6.2 Star catalogue (`src/gen/stars`) — stratified by luminosity
+- **Levels**: level ℓ holds stars in one absolute-magnitude band (level 0: M > 5.0 — most stars; each next level
+  1.5 mag brighter; the last level everything brighter) in cubic cells of `32·2^ℓ` ly (helpers & constants in
+  `src/universe/contracts.ts`). A band stays visible (m ≈ 6.5) out to about one of its cells, so a
+  magnitude-limited view touches only ~3×3×3 cells per level — ~250 cells total instead of millions of sectors.
+- Per cell: count ~ Poisson(∫ stellarDensity × bandFraction(ℓ, population) dV), capped (~4096); each star drawn
+  from the IMF + evolution model *conditioned on its band* (e.g. per-population per-band sample tables built once
+  from a fixed seed). Star `i` = draw order (stable); star seed = `hash32(cellSeed, i)`; ids never depend on sorting.
+- Cells are generated lazily, time-sliced (`Universe.queryBlocks` with a ms budget), cached (LRU), and exposed as
+  struct-of-arrays `StarBlock`s; `StarRecord` objects are created lazily only when something needs one.
 - Masses from the **Kroupa IMF**; populations tilt by `youngFraction`/`bulgeFraction` (more O/B in arms, more old giants in the bulge).
 - Main sequence: piecewise mass–luminosity (L ∝ M^4 … M^3.5 … M^2.3 at low mass), mass–radius, `T = 5772 K · (L/R²)^¼`.
 - Evolved stars by age: subgiants, red giants (K/M III), rare supergiants, white dwarfs (~6%), rare neutron stars and stellar black holes (visual showpieces).
-- Sector `(0,0,0)` index 0 is reserved for the central supermassive black hole.
-- Sectors are sorted by luminosity, so magnitude-limited queries can stop early.
+- `"8.0.0.0.0"` (brightest level, central cell, index 0) is reserved for the central supermassive black hole.
+- **Determinism & versioning**: persisted ratings/bookmarks are keyed by galaxy seed and `GEN_VERSION`; after
+  release, any change to stellarDensity/catalogue/system generation must bump `GEN_VERSION`. Avoid chaotic
+  iterative computations in generation (cross-engine ulp differences in Math.exp/log/sin must not amplify).
 
 ### 6.3 Planetary systems (`src/gen/systems`, `src/sim`)
 - Planet count and spacing by stellar mass/metallicity; roughly geometric spacing (ratios 1.4–2.2) from ~0.03–0.4 AU × √L.
@@ -165,7 +204,9 @@ Cylindrical R = √(x²+z²), θ = atan2(z, x).
 - Flights use the **van Wijk–Nuij** optimal zoom-and-pan path (as in map "flyTo"), in log-distance space, computed *relative to the destination* so precision is perfect on arrival.
 - Levels: `planet` when focused on a body and near it; `system` when inside the focus star's system radius; otherwise `galaxy`.
 - Input: drag = orbit, wheel/pinch = zoom (towards cursor in galaxy view), right-drag/two-finger = pan (galaxy view), click = select, double-click = fly to, Esc = up a level. Keyboard orbit/zoom for accessibility.
-- Deep links: `location.hash` holds a bare token — a `StarId`, `PlanetId` or `MoonId` (only `[A-Za-z0-9._~-]`).
+- Deep links: `location.hash` holds a bare token `[<galaxySeed>~]<id>` — a `StarId`, `PlanetId` or `MoonId`,
+  prefixed with the seed only when it isn't the default (only `[A-Za-z0-9._~-]` survive the hosting sandbox).
+- Mid-flight, the store's `flightTarget` is the source of truth for "where we're going" (goUp, hash, audio).
 
 ## 8. Performance budgets & quality
 
@@ -204,6 +245,9 @@ Cylindrical R = √(x²+z²), θ = atan2(z, x).
 - Only bare `#token` hashes survive — our ids are designed for that.
 - External resources: Google Fonts only. Everything else is bundled.
 - Audio starts only after a user gesture.
+- Web Workers only via `?worker&inline` (the single-file build cannot load separate worker files).
+- Shader programs: avoid per-instance `#define`s (every unique define set compiles a new program — use uniforms);
+  the engine pre-warms programs with `renderer.compileAsync` at boot so arrivals never hitch on compilation.
 
 ## 11. Development workflow
 

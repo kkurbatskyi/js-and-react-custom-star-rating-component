@@ -6,12 +6,7 @@
  *   engine ──setFromEngine(level, focus, distance, simDays…)──▶ store ──▶ UI
  * The engine never re-renders React per frame: it writes throttled values (≤10 Hz).
  */
-import type {
-  FocusTarget,
-  SelectionRef,
-  StarId,
-  ViewLevel,
-} from '../core/types';
+import type { FocusTarget, SelectionRef, StarId, Vec3Tuple, ViewLevel } from '../core/types';
 import type { Quality } from '../render/contracts';
 
 export type QualitySetting = Quality | 'auto';
@@ -76,8 +71,12 @@ export interface AppState {
   focus: FocusTarget;
   /** Camera distance to focus centre, km (throttled). */
   cameraDistanceKm: number;
+  /** Camera position in the galactic frame, ly (throttled) — minimap, coordinates readout. */
+  cameraLy: Vec3Tuple;
   /** Non-null while flying; 0..1. */
   flightProgress: number | null;
+  /** Destination of the active flight (so goUp/hash/audio never act on the stale origin). */
+  flightTarget: FocusTarget | null;
   /** Pending navigation command (UI-written, engine-consumed). */
   navRequest: NavRequest | null;
 
@@ -91,13 +90,20 @@ export interface AppState {
   /** Simulated seconds per real second. */
   timeScale: number;
   paused: boolean;
+  /** Pending clock change (UI-written, engine-consumed), e.g. "back to now". */
+  timeRequest: { simDays: number; seq: number } | null;
 
   // ── persisted user data
   settings: Settings;
-  /** 1..5 ratings keyed by star or planet id. */
+  /**
+   * User data for the CURRENT galaxy seed (ids are only meaningful within one seed). Switching
+   * `settings.galaxySeed` stashes these into `userDataBySeed` and restores the new seed's data.
+   */
+  /** 1..5 ratings keyed by star, planet or moon id. */
   ratings: Record<string, number>;
   bookmarks: string[];
   visited: VisitEntry[];
+  userDataBySeed: Record<string, { ratings: Record<string, number>; bookmarks: string[]; visited: VisitEntry[] }>;
 
   // ── ui
   ui: UIState;
@@ -105,8 +111,11 @@ export interface AppState {
 
   // ── actions
   requestFocus(target: FocusTarget, mode?: 'fly' | 'jump'): void;
-  /** Planet/moon → star → galaxy. */
+  /** Planet/moon → star → galaxy. Resolves from `navRequest?.target ?? flightTarget ?? focus`. */
   goUp(): void;
+  /** Ask the engine to set the simulation clock. */
+  requestTime(simDays: number): void;
+  consumeTimeRequest(seq: number): void;
   select(sel: SelectionRef | null): void;
   setHover(sel: SelectionRef | null): void;
   setTimeScale(scale: number): void;
@@ -124,7 +133,22 @@ export interface AppState {
   pushToast(t: Omit<Toast, 'id'>): void;
   dismissToast(id: number): void;
   /** Engine → store (throttled). */
-  setFromEngine(patch: Partial<Pick<AppState, 'level' | 'focus' | 'cameraDistanceKm' | 'flightProgress' | 'simDays' | 'ready' | 'boot'>>): void;
+  setFromEngine(
+    patch: Partial<
+      Pick<
+        AppState,
+        | 'level'
+        | 'focus'
+        | 'cameraDistanceKm'
+        | 'cameraLy'
+        | 'flightProgress'
+        | 'flightTarget'
+        | 'simDays'
+        | 'ready'
+        | 'boot'
+      >
+    >,
+  ): void;
   /** Engine marks a navRequest consumed. */
   consumeNavRequest(seq: number): void;
 }

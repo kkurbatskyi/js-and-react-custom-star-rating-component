@@ -13,16 +13,22 @@
  * frame → `dispose()` when done. They know nothing about the engine, the store or the UI.
  */
 import type * as THREE from 'three';
-import type { BodyBase, BodyId, StarId, StarRecord } from '../core/types';
+import type { BodyBase, BodyId, StarBlock, StarId } from '../core/types';
 
 export type Quality = 'low' | 'medium' | 'high' | 'ultra';
 
 /** Per-frame context handed to every visual. */
 export interface VisualFrame {
+  /** The shared renderer (for GPU bakes / render-to-texture; never change its global state permanently). */
+  renderer: THREE.WebGLRenderer;
   /** Real seconds since app start (animation clock). */
   timeSec: number;
   dtSec: number;
-  /** Simulation clock in days (orbits, spin). */
+  /**
+   * Simulation clock in days (orbits, spin). NEVER pass it raw to a shader: float32 has ~84 s
+   * resolution at today's J2000 offset. Pass phases computed on the CPU, or (simDays − epoch) with a
+   * per-visual epoch.
+   */
   simDays: number;
   /** The layer camera: at the origin, oriented, projection (fov/aspect/near/far) already set. */
   camera: THREE.PerspectiveCamera;
@@ -37,6 +43,22 @@ export interface VisualFrame {
 export interface ScreenHit {
   id: string;
   distPx: number;
+}
+
+/** A screen-space disc (CSS px) — used for occlusion of picking/labels by nearer layers. */
+export interface ScreenDisc {
+  x: number;
+  y: number;
+  radiusPx: number;
+}
+
+/** A labelable point without text (the consumer resolves names lazily). */
+export interface ScreenAnchor {
+  id: string;
+  x: number;
+  y: number;
+  /** Higher = more prominent (e.g. brighter apparent magnitude). */
+  priority: number;
 }
 
 /** Something that wants a text label on screen. x/y in CSS px from the viewport's top-left. */
@@ -86,15 +108,16 @@ export interface StarfieldOptions {
 
 export interface IStarfieldVisual extends Visual {
   /**
-   * Replace the displayed stars. Positions are stored as float32 offsets from `originLy`
-   * (a rebase origin near the camera) so they stay precise.
+   * Replace the displayed catalogue blocks. Implementations store positions as float32 offsets from
+   * `originLy` (a rebase origin near the camera, computed in float64) so nearby stars stay precise.
+   * Called when the block set changes or the camera drifts far from the origin.
    */
-  setStars(stars: readonly StarRecord[], originLy: THREE.Vector3): void;
+  setBlocks(blocks: readonly StarBlock[], originLy: THREE.Vector3): void;
   update(frame: VisualFrame, o: StarfieldOptions): void;
-  /** Nearest visible star to screen point (CSS px) within maxDistPx, using the last update's camera. */
+  /** Nearest visible star to a screen point (CSS px) within maxDistPx (last update's camera). id = StarId. */
   pick(x: number, y: number, maxDistPx: number): ScreenHit | null;
-  /** Up to `max` label candidates for the most prominent on-screen stars. */
-  labels(max: number): LabelCandidate[];
+  /** Up to `max` most prominent on-screen stars (id = StarId); the layer resolves names. */
+  anchors(max: number): ScreenAnchor[];
 }
 
 // ───────────────────────────────────────────── Star close-up (layer units: km)
@@ -121,20 +144,48 @@ export interface PlanetUniforms {
   sunDirection: THREE.Vector3;
   /** Linear star colour (chromaticity). */
   sunColor: THREE.Color;
+  /** Angular radius of the star seen from the body (soft shadows, penumbrae, sun disc). */
+  sunAngularRadiusRad: number;
   /** Artistic irradiance scale, ~1 (clamped ~0.4–2 so every world is viewable). */
   sunIntensity: number;
   /** Shadow casters (planet ↔ moon eclipses). Optional. */
   occluders?: readonly { positionKm: THREE.Vector3; radiusKm: number }[];
-  /** 0..1 fade (transitions). */
+  /**
+   * 0..1 fade. Opaque parts treat it as a brightness multiplier (never alpha); translucent shells
+   * (atmosphere, clouds, rings) may use it as opacity.
+   */
   intensity: number;
 }
 
+/** 'full' = high-resolution baked surface for the focused body; 'lite' = cheap version for everything else. */
 export type PlanetDetail = 'full' | 'lite';
 
 export interface IPlanetVisual extends Visual {
   readonly body: BodyBase;
+  readonly detail: PlanetDetail;
+  /** True once GPU bakes are complete (a 'full' visual looks final). */
+  readonly ready: boolean;
+  /**
+   * Advance GPU baking by at most ~budgetMs. Returns `ready`. The engine calls this every frame for
+   * visuals that are not ready, and swaps lite → full only once full is ready (no hitches, no pop).
+   */
+  prepare(renderer: THREE.WebGLRenderer, budgetMs: number): boolean;
   update(frame: VisualFrame, u: PlanetUniforms): void;
 }
+
+/**
+ * Transparent draw order inside a planet (three.js sorts transparent objects by renderOrder, then
+ * depth — but shells sharing a centre have equal depth, so order MUST be explicit).
+ * Rings draw as two view-dependent halves: the far half before clouds/atmosphere, the near half after.
+ */
+export const RENDER_ORDER = {
+  surface: 0,
+  ringsFar: 10,
+  clouds: 20,
+  atmosphere: 30,
+  ringsNear: 40,
+  overlay: 50,
+} as const;
 
 /** Sub-components composed inside a PlanetVisual. */
 export interface IAtmosphereShell extends Visual {

@@ -18,9 +18,10 @@ export type RGB = readonly [number, number, number];
 export type QuatTuple = readonly [number, number, number, number];
 
 /**
- * Star identifier: `${sx}.${sy}.${sz}.${i}` — integer sector coordinates (may be negative)
- * plus the index within that sector (0 = most luminous). URL-hash safe: digits, '-', '.'.
- * Example: "812.-2.113.7"
+ * Star identifier: `${level}.${cx}.${cy}.${cz}.${i}` — catalogue level (luminosity band, see
+ * src/universe/contracts.ts), integer cell coordinates at that level's cell size (may be negative),
+ * and the star's DRAW ORDER within the cell (stable; not a luminosity rank).
+ * URL-hash safe: digits, '-', '.'. Example: "3.101.-1.14.7". "8.0.0.0.0" is the galactic-core black hole.
  */
 export type StarId = string;
 /** `${StarId}.${letter}` — letter follows exoplanet convention: b, c, d… by orbital order. */
@@ -131,9 +132,11 @@ export type SpectralClass = 'O' | 'B' | 'A' | 'F' | 'G' | 'K' | 'M' | 'D' | 'N' 
 /** Lightweight star record, generated in bulk per sector (thousands at a time). */
 export interface StarRecord {
   id: StarId;
-  /** Integer sector coordinates. */
-  sector: Vec3Tuple;
-  /** Index within the sector; sectors are sorted by luminosity, descending. */
+  /** Catalogue level (luminosity band). */
+  level: number;
+  /** Integer cell coordinates at this level's cell size. */
+  cell: Vec3Tuple;
+  /** Draw order within the cell (stable). */
   index: number;
   /** Position in the galactic frame, light-years. */
   posLy: Vec3Tuple;
@@ -172,6 +175,30 @@ export interface StarDetails extends StarRecord {
   pulsarPeriodSec?: number;
   /** Black holes (and some white dwarfs): 0..1 visual accretion-disk brightness. */
   accretion?: number;
+}
+
+/**
+ * One catalogue cell in struct-of-arrays form — no per-star objects, cheap to cache and to upload.
+ * Star `i` of the block has id `${key}.${i}`. Produced by the Universe facade, consumed by the starfield.
+ */
+export interface StarBlock {
+  /** `${level}.${cx}.${cy}.${cz}` */
+  key: string;
+  level: number;
+  cell: Vec3Tuple;
+  /** Cell centre in the galactic frame (ly, float64). */
+  originLy: Vec3Tuple;
+  count: number;
+  /** count×3 positions relative to originLy (ly). */
+  offsetsLy: Float32Array;
+  /** count absolute visual magnitudes. */
+  absMag: Float32Array;
+  /** count bolometric luminosities (L☉) — for shared photometry. */
+  luminositySolar: Float32Array;
+  /** count×3 linear-sRGB blackbody chromaticity (max component 1, NOT saturation-boosted). */
+  colorRGB: Float32Array;
+  /** count StarKind indices into STAR_KINDS (src/universe/contracts.ts). */
+  kind: Uint8Array;
 }
 
 // ───────────────────────────────────────────────────────────── Planets & moons
@@ -238,6 +265,29 @@ export interface RingSystem {
   seed: number;
 }
 
+/**
+ * Canonical colours & coverages decided by the generator, so every consumer agrees: the surface,
+ * cloud and atmosphere shaders use these as their base values (adding detail on top), and the UI uses
+ * `swatch`/`surfaceColors` for thumbnails. All colours linear sRGB.
+ */
+export interface AppearanceHints {
+  /** 2–5 representative surface albedo colours, dominant first (rock/soil/vegetation/ice; giants: band colours). */
+  surfaceColors: RGB[];
+  /** Liquid colour when oceanCoverage > 0 (water deep blue; hydrocarbon seas dark amber), else null. */
+  oceanColor: RGB | null;
+  /** 0..1 cloud-cover fraction (hothouse ≈ 1). */
+  cloudCoverage: number;
+  cloudColor: RGB;
+  /** Limb/sky tint seen from space; null when airless. */
+  hazeColor: RGB | null;
+  /** 0..1 night-side city-light density (civilisations). */
+  nightLights: number;
+  /** 0..1 molten-surface glow (lava worlds, tidally heated moons). */
+  lavaGlow: number;
+  /** One colour summarising the body from afar (UI swatches, markers, lite visuals). */
+  swatch: RGB;
+}
+
 /** Physical description shared by planets and moons. Renderers derive appearance from this. */
 export interface BodyBase {
   id: BodyId;
@@ -274,6 +324,19 @@ export interface BodyBase {
   life: LifeLevel;
   /** Giants only. */
   sudarskyClass: SudarskyClass | null;
+  /** Polar flattening (0 = sphere; Saturn ≈ 0.098). */
+  oblateness: number;
+  /** Rings in the body's equatorial plane, or null (moons: always null). */
+  rings: RingSystem | null;
+  /** 0..1 Earth-similarity-style index. */
+  habitability: number;
+  /** One or two sentences of guidebook prose (wry, informative). */
+  blurb: string;
+  /** Computed "surveyor's rating", 1..5 in 0.5 steps. */
+  surveyRating: number;
+  /** Short descriptive tags, e.g. ["eyeball world", "super-Earth", "ringed"]. */
+  tags: string[];
+  appearance: AppearanceHints;
 }
 
 export interface Moon extends BodyBase {
@@ -292,16 +355,7 @@ export interface Planet extends BodyBase {
   /** Notable planets get a proper name; `name` is then that proper name. */
   properName: string | null;
   moons: Moon[];
-  rings: RingSystem | null;
   inHabitableZone: boolean;
-  /** 0..1 Earth-similarity-style index. */
-  habitability: number;
-  /** One or two sentences of guidebook prose (wry, informative). */
-  blurb: string;
-  /** Computed "surveyor's rating", 1..5 in 0.5 steps. */
-  surveyRating: number;
-  /** Short descriptive tags, e.g. ["eyeball world", "super-Earth", "ringed"]. */
-  tags: string[];
 }
 
 export interface AsteroidBelt {
@@ -323,6 +377,11 @@ export interface StarSystem {
   belts: AsteroidBelt[];
   habitableZoneKm: readonly [number, number];
   frostLineKm: number;
+  /**
+   * Radius of the system's "sphere of influence" for navigation & layer activation:
+   * max(1.5 × outermost orbit or belt edge, 2000 × stellar radius, 1 AU).
+   */
+  radiusKm: number;
   /** Rotation taking vectors from the system's ecliptic frame S into galactic axes G. */
   eclipticToGalactic: QuatTuple;
   blurb: string;
