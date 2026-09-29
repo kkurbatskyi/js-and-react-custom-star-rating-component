@@ -31,8 +31,10 @@ export function createGalaxyModelFromParams(params: GalaxyParams): GalaxyModel {
     armFactor: s.armFactor,
     youngFraction: s.young,
     bulgeFraction: s.bulgeShare,
-    samplePosition: (rng: Rng, out: [number, number, number] = [0, 0, 0]): [number, number, number] =>
-      s.sample(rng, out),
+    samplePosition: (
+      rng: Rng,
+      out: [number, number, number] = [0, 0, 0],
+    ): [number, number, number] => s.sample(rng, out),
   };
 }
 

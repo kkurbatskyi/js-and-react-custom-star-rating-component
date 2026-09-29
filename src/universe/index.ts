@@ -80,7 +80,8 @@ export function getUniverse(seed: number = DEFAULT_GALAXY_SEED): Universe {
   return universe;
 }
 
-const dist = (a: Vec3Tuple, b: Vec3Tuple): number => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+const dist = (a: Vec3Tuple, b: Vec3Tuple): number =>
+  Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
 interface SearchEntry {
   ref: SelectionRef;
@@ -325,7 +326,12 @@ class MockUniverse implements Universe {
     }
     const body = this.getBody(ref.id) as BodyLookup;
     if (body.moon) {
-      return { ref, name: body.moon.name, subtitle: `Moon of ${body.planet.name} · ${body.system.star.name}`, score };
+      return {
+        ref,
+        name: body.moon.name,
+        subtitle: `Moon of ${body.planet.name} · ${body.system.star.name}`,
+        score,
+      };
     }
     const label = planetTypeLabel(body.planet.type);
     return {
@@ -347,13 +353,17 @@ class MockUniverse implements Universe {
         pool = local;
         break;
       case 'habitable':
-        pool = local.filter((s) => planetsOf(s.id).some((p) => p.life !== 'none' || p.habitability >= 0.6));
+        pool = local.filter((s) =>
+          planetsOf(s.id).some((p) => p.life !== 'none' || p.habitability >= 0.6),
+        );
         break;
       case 'ringed':
         pool = local.filter((s) => planetsOf(s.id).some((p) => p.rings !== null));
         break;
       case 'giant':
-        pool = local.filter((s) => s.kind === 'giant' || s.kind === 'supergiant' || s.kind === 'subgiant');
+        pool = local.filter(
+          (s) => s.kind === 'giant' || s.kind === 'supergiant' || s.kind === 'subgiant',
+        );
         break;
       case 'exotic':
         pool = this.catalog.stars.filter(
@@ -362,7 +372,9 @@ class MockUniverse implements Universe {
         break;
     }
     // Sort by id hash so the order is independent of catalogue construction order.
-    const ids = pool.map((s) => s.id).sort((a, b) => hashString(a) - hashString(b) || (a < b ? -1 : 1));
+    const ids = pool
+      .map((s) => s.id)
+      .sort((a, b) => hashString(a) - hashString(b) || (a < b ? -1 : 1));
     this.candidates.set(kind, ids);
     return ids;
   }

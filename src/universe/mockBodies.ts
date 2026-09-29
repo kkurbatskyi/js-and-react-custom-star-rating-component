@@ -130,7 +130,12 @@ const isGiantType = (t: PlanetType): boolean => t === 'gas-giant' || t === 'ice-
 
 // ───────────────────────────────────────────── Physical derivations
 
-function buildAtmosphere(spec: AtmosphereSpec, tempK: number, gravityG: number, greenhouseK: number): Atmosphere {
+function buildAtmosphere(
+  spec: AtmosphereSpec,
+  tempK: number,
+  gravityG: number,
+  greenhouseK: number,
+): Atmosphere {
   const total = spec.composition.reduce((sum, [, f]) => sum + f, 0) || 1;
   const composition = spec.composition
     .map(([gas, f]) => ({ gas, fraction: f / total }))
@@ -161,7 +166,12 @@ const MOMENT_OF_INERTIA: Readonly<Record<PlanetType, number>> = {
  * Polar flattening from the Darwin–Radau relation f = (5/2)q / (1 + (25/4)(1 − (3/2)C/MR²)²),
  * q = ω²R³/GM. Reproduces Earth (0.0034), Jupiter (0.065) and Saturn (0.098) to ~5 %.
  */
-function oblateness(type: PlanetType, massEarth: number, radiusKm: number, rotationHours: number): number {
+function oblateness(
+  type: PlanetType,
+  massEarth: number,
+  radiusKm: number,
+  rotationHours: number,
+): number {
   const period = Math.abs(rotationHours) * SECONDS_PER_HOUR;
   if (!(period > 0) || !Number.isFinite(period)) return 0;
   const omega = TAU / period;
@@ -323,7 +333,8 @@ function cloudsFor(body: BodyBase, rng: Rng): { coverage: number; color: RGB } {
 
 export function deriveAppearance(body: BodyBase, rng: Rng): AppearanceHints {
   const surfaceColors = surfacePalette(body).map((c) => vary(rng, c));
-  if (body.iceCoverage > 0.05 && body.type !== 'ice' && !isGiantType(body.type)) surfaceColors.push(ICE_WHITE);
+  if (body.iceCoverage > 0.05 && body.type !== 'ice' && !isGiantType(body.type))
+    surfaceColors.push(ICE_WHITE);
   const oceanColor: RGB | null =
     body.oceanCoverage <= 0
       ? null
@@ -410,7 +421,9 @@ function buildBodyBase(
     albedo: spec.albedo,
     equilibriumTempK: teq,
     surfaceTempK,
-    atmosphere: spec.atmosphere ? buildAtmosphere(spec.atmosphere, surfaceTempK, gravity, greenhouseK) : null,
+    atmosphere: spec.atmosphere
+      ? buildAtmosphere(spec.atmosphere, surfaceTempK, gravity, greenhouseK)
+      : null,
     oceanCoverage: spec.oceanCoverage,
     iceCoverage: spec.iceCoverage,
     volcanism: spec.volcanism,
@@ -500,14 +513,16 @@ function planetTags(p: Planet, star: StarDetails): string[] {
   const rocky = !isGiantType(p.type) && p.type !== 'dwarf';
   const rEarth = p.radiusKm / EARTH_RADIUS_KM;
   if (p.inHabitableZone) tags.push('habitable zone');
-  if (p.tidallyLocked && rocky && star.spectralClass === 'M' && p.inHabitableZone) tags.push('eyeball world');
+  if (p.tidallyLocked && rocky && star.spectralClass === 'M' && p.inHabitableZone)
+    tags.push('eyeball world');
   else if (p.tidallyLocked) tags.push('tidally locked');
   if (rocky && rEarth >= 1.25 && rEarth <= 2.2) tags.push('super-Earth');
   if (p.type === 'gas-giant' && p.equilibriumTempK > 900) tags.push('hot Jupiter');
   if (p.life !== 'none') tags.push(p.life === 'microbial' ? 'microbial life' : p.life);
   if (p.rings) tags.push(p.rings.opticalDepth < 0.2 ? 'faint rings' : 'ringed');
   if (p.moons.length >= 2) tags.push(`${p.moons.length} moons`);
-  if (Math.abs(p.axialTiltRad) > 1.2 && Math.abs(p.axialTiltRad) < Math.PI - 0.3) tags.push('extreme axial tilt');
+  if (Math.abs(p.axialTiltRad) > 1.2 && Math.abs(p.axialTiltRad) < Math.PI - 0.3)
+    tags.push('extreme axial tilt');
   if (p.orbit.eccentricity > 0.2) tags.push('eccentric orbit');
   return tags;
 }
@@ -564,11 +579,14 @@ const BLURBS: Readonly<Record<PlanetType, readonly Template[]>> = {
   lava: [
     (c) =>
       `${c.name} has not finished deciding what shape to be. Lava seas glow at ${c.tempC} under ${c.star}'s glare; landing is possible, briefly.`,
-    () => 'Molten, tidally squeezed and permanently on fire: a world geologists dream about and insurers refuse to discuss.',
+    () =>
+      'Molten, tidally squeezed and permanently on fire: a world geologists dream about and insurers refuse to discuss.',
   ],
   barren: [
-    (c) => `Airless, cratered and perfectly still, ${c.name} keeps an exact record of every rock that ever hit it.`,
-    () => 'A grey ball of dust and old impacts where nothing has happened for a billion years, and nothing is scheduled.',
+    (c) =>
+      `Airless, cratered and perfectly still, ${c.name} keeps an exact record of every rock that ever hit it.`,
+    () =>
+      'A grey ball of dust and old impacts where nothing has happened for a billion years, and nothing is scheduled.',
   ],
   desert: [
     (c) =>
@@ -577,26 +595,32 @@ const BLURBS: Readonly<Record<PlanetType, readonly Template[]>> = {
       `A dry, wind-carved world at ${c.tempC}. The dunes sing when the wind is right, which is the only entertainment for light-years.`,
   ],
   terran: [
-    (c) => `Oceans, clouds and continents at a comfortable ${c.tempC}. Suspiciously pleasant; read the small print.`,
+    (c) =>
+      `Oceans, clouds and continents at a comfortable ${c.tempC}. Suspiciously pleasant; read the small print.`,
     (c) =>
       `Blue water, brown land, white weather: ${c.name} looks like a postcard from somewhere you have never been. A year here lasts ${c.year}.`,
   ],
   ocean: [
-    () => 'One enormous ocean with a few islands for punctuation. The surf is up everywhere, forever.',
+    () =>
+      'One enormous ocean with a few islands for punctuation. The surf is up everywhere, forever.',
     (c) =>
       `A planet-wide sea hundreds of kilometres deep under ${c.pressure} of humid air. Bring a boat; bring a bigger boat.`,
   ],
   ice: [
-    () => 'A world sealed under a shell of ice, cracked like old porcelain. Something may be sloshing about underneath.',
-    (c) => `Frozen solid at ${c.tempC}, ${c.name} reflects most of the light it gets and resents the rest.`,
+    () =>
+      'A world sealed under a shell of ice, cracked like old porcelain. Something may be sloshing about underneath.',
+    (c) =>
+      `Frozen solid at ${c.tempC}, ${c.name} reflects most of the light it gets and resents the rest.`,
   ],
   hothouse: [
     (c) =>
       `A runaway greenhouse under ${c.pressure} of carbon dioxide, with a surface at ${c.tempC}. The clouds are acid and the forecast is worse.`,
-    () => 'Venus went wrong once; this planet went wrong on purpose. Visit the upper atmosphere, where it is merely unpleasant.',
+    () =>
+      'Venus went wrong once; this planet went wrong on purpose. Visit the upper atmosphere, where it is merely unpleasant.',
   ],
   'gas-giant': [
-    () => 'A banded giant of hydrogen and helium, with storms larger than whole planets drifting through its clouds.',
+    () =>
+      'A banded giant of hydrogen and helium, with storms larger than whole planets drifting through its clouds.',
     (c) =>
       `${c.name} is mostly weather: stripes of ammonia cloud racing round a world where the cloud-top gravity is ${c.gravity}.`,
   ],
@@ -606,8 +630,10 @@ const BLURBS: Readonly<Record<PlanetType, readonly Template[]>> = {
       `Serene, remote and ${c.tempC} at the cloud tops, ${c.name} is the colour of glacier meltwater and roughly as welcoming.`,
   ],
   dwarf: [
-    () => 'A small, icy world on the outskirts: too modest to clear its orbit, too far out to care.',
-    (c) => `From ${c.name}, ${c.star} is just the brightest star in a black sky. A year here lasts ${c.year}.`,
+    () =>
+      'A small, icy world on the outskirts: too modest to clear its orbit, too far out to care.',
+    (c) =>
+      `From ${c.name}, ${c.star} is just the brightest star in a black sky. A year here lasts ${c.year}.`,
   ],
 };
 
@@ -641,16 +667,23 @@ function planetBlurb(p: Planet, star: StarDetails, rng: Rng): string {
   return rng.pick(BLURBS[p.type])(proseContext(p, star.name)) + LIFE_LINE[p.life];
 }
 
-const MOON_BLURBS: Readonly<Partial<Record<PlanetType, (name: string, parent: string) => string>>> = {
-  lava: (n, p) => `${n} is kneaded by ${p}'s tides until its insides melt; its volcanoes repaint the surface every few years.`,
-  ice: (n, p) => `An ice-shelled moon of ${p}. Cracks in ${n}'s crust hint at an ocean below, kept liquid by tidal flexing.`,
-  barren: (n, p) => `A battered, airless companion of ${p}; ${n} keeps count of every impact since the system formed.`,
-  dwarf: (n) => `${n} is small, lumpy and possibly a captured asteroid that never found the exit.`,
-};
+const MOON_BLURBS: Readonly<Partial<Record<PlanetType, (name: string, parent: string) => string>>> =
+  {
+    lava: (n, p) =>
+      `${n} is kneaded by ${p}'s tides until its insides melt; its volcanoes repaint the surface every few years.`,
+    ice: (n, p) =>
+      `An ice-shelled moon of ${p}. Cracks in ${n}'s crust hint at an ocean below, kept liquid by tidal flexing.`,
+    barren: (n, p) =>
+      `A battered, airless companion of ${p}; ${n} keeps count of every impact since the system formed.`,
+    dwarf: (n) =>
+      `${n} is small, lumpy and possibly a captured asteroid that never found the exit.`,
+  };
 
 function moonBlurb(m: Moon, parentName: string, rng: Rng): string {
   const template = MOON_BLURBS[m.type];
-  return template ? template(m.name, parentName) : rng.pick(BLURBS[m.type])(proseContext(m, parentName));
+  return template
+    ? template(m.name, parentName)
+    : rng.pick(BLURBS[m.type])(proseContext(m, parentName));
 }
 
 // ───────────────────────────────────────────── Procedural systems
@@ -818,27 +851,48 @@ const AIR: Readonly<Record<string, readonly Gas[]>> = {
   ],
 };
 
-function atmosphereFor(type: PlanetType, rng: Rng): { atm: AtmosphereSpec | null; greenhouseK: number } {
+function atmosphereFor(
+  type: PlanetType,
+  rng: Rng,
+): { atm: AtmosphereSpec | null; greenhouseK: number } {
   switch (type) {
     case 'lava':
       return rng.chance(0.5)
-        ? { atm: { pressureAtm: logRange(rng, 0.001, 0.05), composition: AIR.rockVapour }, greenhouseK: rng.range(5, 20) }
+        ? {
+            atm: { pressureAtm: logRange(rng, 0.001, 0.05), composition: AIR.rockVapour },
+            greenhouseK: rng.range(5, 20),
+          }
         : { atm: null, greenhouseK: 0 };
     case 'desert': {
       const p = logRange(rng, 0.01, 1.2);
-      return { atm: { pressureAtm: p, composition: rng.chance(0.6) ? AIR.co2 : AIR.n2co2 }, greenhouseK: 3 + 15 * p };
+      return {
+        atm: { pressureAtm: p, composition: rng.chance(0.6) ? AIR.co2 : AIR.n2co2 },
+        greenhouseK: 3 + 15 * p,
+      };
     }
     case 'terran': {
       const p = rng.range(0.6, 2.5);
-      return { atm: { pressureAtm: p, composition: AIR.abiotic }, greenhouseK: rng.range(15, 40) * p ** 0.3 };
+      return {
+        atm: { pressureAtm: p, composition: AIR.abiotic },
+        greenhouseK: rng.range(15, 40) * p ** 0.3,
+      };
     }
     case 'ocean':
-      return { atm: { pressureAtm: rng.range(1, 5), composition: AIR.humid }, greenhouseK: rng.range(25, 60) };
+      return {
+        atm: { pressureAtm: rng.range(1, 5), composition: AIR.humid },
+        greenhouseK: rng.range(25, 60),
+      };
     case 'hothouse':
-      return { atm: { pressureAtm: rng.range(20, 95), composition: AIR.venus }, greenhouseK: rng.range(250, 520) };
+      return {
+        atm: { pressureAtm: rng.range(20, 95), composition: AIR.venus },
+        greenhouseK: rng.range(250, 520),
+      };
     case 'ice':
       return rng.chance(0.25)
-        ? { atm: { pressureAtm: rng.range(0.05, 1.5), composition: AIR.titan }, greenhouseK: rng.range(2, 10) }
+        ? {
+            atm: { pressureAtm: rng.range(0.05, 1.5), composition: AIR.titan },
+            greenhouseK: rng.range(2, 10),
+          }
         : { atm: null, greenhouseK: 0 };
     case 'gas-giant':
       return { atm: { pressureAtm: 1, composition: AIR.jovian }, greenhouseK: rng.range(30, 70) };
@@ -852,7 +906,8 @@ function atmosphereFor(type: PlanetType, rng: Rng): { atm: AtmosphereSpec | null
 
 function spinFor(type: PlanetType, rng: Rng, locked: boolean): SpinSpec {
   if (locked) return { kind: 'locked' };
-  if (type === 'hothouse' && rng.chance(0.4)) return { kind: 'hours', hours: -rng.range(1000, 6000) };
+  if (type === 'hothouse' && rng.chance(0.4))
+    return { kind: 'hours', hours: -rng.range(1000, 6000) };
   if (type === 'gas-giant') return { kind: 'hours', hours: rng.range(8, 18) };
   if (type === 'ice-giant') return { kind: 'hours', hours: rng.range(14, 20) };
   if (type === 'dwarf') return { kind: 'hours', hours: rng.range(6, 160) };
@@ -871,7 +926,12 @@ function surfaceFor(type: PlanetType, rng: Rng, surfaceTempK: number): SurfaceSp
   const polarIce = clamp((285 - surfaceTempK) / 80, 0.02, 0.7);
   switch (type) {
     case 'lava':
-      return { ocean: rng.range(0.15, 0.45), ice: 0, volcanism: rng.range(0.8, 1), craters: rng.range(0, 0.1) };
+      return {
+        ocean: rng.range(0.15, 0.45),
+        ice: 0,
+        volcanism: rng.range(0.8, 1),
+        craters: rng.range(0, 0.1),
+      };
     case 'barren':
       return {
         ocean: 0,
@@ -887,15 +947,35 @@ function surfaceFor(type: PlanetType, rng: Rng, surfaceTempK: number): SurfaceSp
         craters: rng.range(0.2, 0.6),
       };
     case 'terran':
-      return { ocean: rng.range(0.35, 0.8), ice: polarIce, volcanism: rng.range(0.05, 0.4), craters: rng.range(0.01, 0.1) };
+      return {
+        ocean: rng.range(0.35, 0.8),
+        ice: polarIce,
+        volcanism: rng.range(0.05, 0.4),
+        craters: rng.range(0.01, 0.1),
+      };
     case 'ocean':
-      return { ocean: rng.range(0.92, 1), ice: polarIce * 0.8, volcanism: rng.range(0.05, 0.3), craters: rng.range(0, 0.03) };
+      return {
+        ocean: rng.range(0.92, 1),
+        ice: polarIce * 0.8,
+        volcanism: rng.range(0.05, 0.3),
+        craters: rng.range(0, 0.03),
+      };
     case 'hothouse':
       return { ocean: 0, ice: 0, volcanism: rng.range(0.3, 0.8), craters: rng.range(0.02, 0.1) };
     case 'ice':
-      return { ocean: 0, ice: rng.range(0.75, 1), volcanism: rng.range(0, 0.3), craters: rng.range(0.05, 0.5) };
+      return {
+        ocean: 0,
+        ice: rng.range(0.75, 1),
+        volcanism: rng.range(0, 0.3),
+        craters: rng.range(0.05, 0.5),
+      };
     case 'dwarf':
-      return { ocean: 0, ice: rng.range(0.3, 0.9), volcanism: rng.range(0, 0.1), craters: rng.range(0.3, 0.9) };
+      return {
+        ocean: 0,
+        ice: rng.range(0.3, 0.9),
+        volcanism: rng.range(0, 0.1),
+        craters: rng.range(0.3, 0.9),
+      };
     case 'gas-giant':
     case 'ice-giant':
       return { ocean: 0, ice: 0, volcanism: 0, craters: 0 };
@@ -965,7 +1045,8 @@ function proceduralPlanet(
     : rng.chance(0.05)
       ? rng.range(1.4, 2.2)
       : Math.min(1.2, Math.abs(rng.normal(0, 0.35)));
-  const properName = life !== 'none' || habitability >= 0.75 ? uniqueProperName(rng.fork('name'), takenNames) : null;
+  const properName =
+    life !== 'none' || habitability >= 0.75 ? uniqueProperName(rng.fork('name'), takenNames) : null;
   const eMax = locked ? 0.02 : type === 'dwarf' ? 0.3 : 0.12;
   const orbit = randomOrbit(rng, aAU * KM_PER_AU, eMax, type === 'dwarf' ? 0.15 : 0.03);
 
@@ -1013,7 +1094,14 @@ function proceduralPlanet(
   return spec;
 }
 
-type MoonTemplate = readonly [rMin: number, rMax: number, dMin: number, dMax: number, aMin: number, aMax: number];
+type MoonTemplate = readonly [
+  rMin: number,
+  rMax: number,
+  dMin: number,
+  dMax: number,
+  aMin: number,
+  aMax: number,
+];
 
 const MOON_TEMPLATES: Readonly<Partial<Record<PlanetType, MoonTemplate>>> = {
   lava: [0.2, 0.32, 3.2, 3.7, 0.5, 0.65],
@@ -1033,7 +1121,12 @@ function proceduralMoons(ctx: SystemContext, index: number, planet: PlanetSpec):
   else if (terrestrial && rng.chance(0.35)) count = 1;
   else if (type === 'dwarf' && rng.chance(0.1)) count = 1;
 
-  const hill = hillRadiusKm(planet.orbit.aKm, planet.orbit.e, earthMassKg(planet.massEarth), ctx.starMassKg);
+  const hill = hillRadiusKm(
+    planet.orbit.aKm,
+    planet.orbit.e,
+    earthMassKg(planet.massEarth),
+    ctx.starMassKg,
+  );
   let a = giant
     ? Math.max((planet.rings?.outerRadiusKm ?? 0) * 1.4, planet.radiusKm * rng.range(5, 8))
     : planet.radiusKm * rng.range(20, 60);
@@ -1077,7 +1170,8 @@ function proceduralMoons(ctx: SystemContext, index: number, planet: PlanetSpec):
       greenhouseK: titan ? m.range(5, 12) : 0,
       atmosphere: titan ? { pressureAtm: m.range(1, 1.6), composition: AIR.titan } : null,
       oceanCoverage: mType === 'lava' || titan ? m.range(0.01, 0.05) : 0,
-      iceCoverage: mType === 'ice' ? m.range(0.6, 1) : mType === 'dwarf' ? m.range(0.3, 0.8) : m.range(0, 0.1),
+      iceCoverage:
+        mType === 'ice' ? m.range(0.6, 1) : mType === 'dwarf' ? m.range(0.3, 0.8) : m.range(0, 0.1),
       volcanism: mType === 'lava' ? m.range(0.85, 1) : m.range(0, 0.2),
       craterDensity: mType === 'lava' ? 0 : m.range(0.2, 1),
       life: 'none',
@@ -1094,7 +1188,12 @@ function randomRotation(rng: Rng): QuatTuple {
   const u3 = rng.next();
   const s1 = Math.sqrt(1 - u1);
   const s2 = Math.sqrt(u1);
-  return [s1 * Math.sin(TAU * u2), s1 * Math.cos(TAU * u2), s2 * Math.sin(TAU * u3), s2 * Math.cos(TAU * u3)];
+  return [
+    s1 * Math.sin(TAU * u2),
+    s1 * Math.cos(TAU * u2),
+    s2 * Math.sin(TAU * u3),
+    s2 * Math.cos(TAU * u3),
+  ];
 }
 
 const STAR_LABEL: Readonly<Record<string, string>> = {
@@ -1112,17 +1211,26 @@ const STAR_LABEL: Readonly<Record<string, string>> = {
 
 export function starKindLabel(star: StarDetails): string {
   if (star.kind === 'giant' || star.kind === 'supergiant') {
-    const colour = star.spectralClass === 'M' ? 'red' : star.spectralClass === 'K' ? 'orange' : 'yellow';
+    const colour =
+      star.spectralClass === 'M' ? 'red' : star.spectralClass === 'K' ? 'orange' : 'yellow';
     return `${colour} ${star.kind}`;
   }
   if (star.kind === 'subgiant') return 'subgiant';
   return STAR_LABEL[star.spectralClass] ?? 'star';
 }
 
-function systemTags(star: StarDetails, planets: readonly Planet[], belts: readonly AsteroidBelt[]): string[] {
-  const tags = [starKindLabel(star), `${planets.length} ${planets.length === 1 ? 'planet' : 'planets'}`];
+function systemTags(
+  star: StarDetails,
+  planets: readonly Planet[],
+  belts: readonly AsteroidBelt[],
+): string[] {
+  const tags = [
+    starKindLabel(star),
+    `${planets.length} ${planets.length === 1 ? 'planet' : 'planets'}`,
+  ];
   if (planets.some((p) => p.life !== 'none')) tags.push('living world');
-  else if (planets.some((p) => p.inHabitableZone && !isGiantType(p.type))) tags.push('habitable-zone world');
+  else if (planets.some((p) => p.inHabitableZone && !isGiantType(p.type)))
+    tags.push('habitable-zone world');
   if (planets.some((p) => p.rings && p.rings.opticalDepth >= 0.2)) tags.push('ringed giant');
   if (belts.some((b) => b.composition !== 'ice')) tags.push('asteroid belt');
   return tags;
@@ -1148,7 +1256,8 @@ function systemBlurb(star: StarDetails, planets: readonly Planet[], rng: Rng): s
   ]);
   if (living) return `${opener} ${living.name} is the reason to come: it is alive.`;
   if (ringed) return `${opener} The ringed giant ${ringed.name} is worth the detour.`;
-  if (star.kind === 'white-dwarf') return `${opener} The survivors orbit the cooling ember of a star that has already died once.`;
+  if (star.kind === 'white-dwarf')
+    return `${opener} The survivors orbit the cooling ember of a star that has already died once.`;
   if (star.kind === 'neutron-star') {
     return `${opener} The planets are bathed in the lighthouse beam of a spinning, city-sized stellar corpse.`;
   }
@@ -1161,9 +1270,14 @@ function systemBlurb(star: StarDetails, planets: readonly Planet[], rng: Rng): s
 }
 
 /** Navigation radius (types.ts): max(1.5 × outermost apoapsis or belt edge, 2000 × stellar radius, 1 AU). */
-function systemRadiusKm(star: StarDetails, planets: readonly Planet[], belts: readonly AsteroidBelt[]): number {
+function systemRadiusKm(
+  star: StarDetails,
+  planets: readonly Planet[],
+  belts: readonly AsteroidBelt[],
+): number {
   let outer = 0;
-  for (const p of planets) outer = Math.max(outer, p.orbit.semiMajorAxisKm * (1 + p.orbit.eccentricity));
+  for (const p of planets)
+    outer = Math.max(outer, p.orbit.semiMajorAxisKm * (1 + p.orbit.eccentricity));
   for (const b of belts) outer = Math.max(outer, b.outerRadiusKm);
   return Math.max(1.5 * outer, 2000 * star.radiusKm, KM_PER_AU);
 }
@@ -1202,10 +1316,15 @@ export function buildProceduralSystem(star: StarDetails): StarSystem {
   const layout = ctx.rng.fork('layout');
   const L = star.luminositySolar;
   const [hzInKm, hzOutKm] = habitableZoneKm(L);
-  const zones = { hzIn: hzInKm / KM_PER_AU, hzOut: hzOutKm / KM_PER_AU, frost: frostLineKm(L) / KM_PER_AU };
+  const zones = {
+    hzIn: hzInKm / KM_PER_AU,
+    hzOut: hzOutKm / KM_PER_AU,
+    frost: frostLineKm(L) / KM_PER_AU,
+  };
   const remnant = star.kind === 'white-dwarf' || star.kind === 'neutron-star';
   const evolved = star.kind === 'giant' || star.kind === 'supergiant' || star.kind === 'subgiant';
-  const count = star.kind === 'black-hole' ? 0 : remnant || evolved ? layout.int(1, 3) : layout.int(2, 5);
+  const count =
+    star.kind === 'black-hole' ? 0 : remnant || evolved ? layout.int(1, 3) : layout.int(2, 5);
 
   let aAU =
     star.kind === 'neutron-star'
@@ -1223,7 +1342,8 @@ export function buildProceduralSystem(star: StarDetails): StarSystem {
     const hzMid = Math.sqrt(zones.hzIn * zones.hzOut);
     let best = 0;
     for (let k = 1; k < count; k++) {
-      if (Math.abs(Math.log(orbitsAU[k] / hzMid)) < Math.abs(Math.log(orbitsAU[best] / hzMid))) best = k;
+      if (Math.abs(Math.log(orbitsAU[k] / hzMid)) < Math.abs(Math.log(orbitsAU[best] / hzMid)))
+        best = k;
     }
     const target = clamp(hzMid * layout.range(0.9, 1.1), zones.hzIn * 1.01, zones.hzOut * 0.99);
     const inner = best > 0 ? orbitsAU[best - 1] : 0;

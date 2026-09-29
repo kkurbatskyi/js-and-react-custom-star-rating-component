@@ -103,7 +103,10 @@ export interface AppState {
   ratings: Record<string, number>;
   bookmarks: string[];
   visited: VisitEntry[];
-  userDataBySeed: Record<string, { ratings: Record<string, number>; bookmarks: string[]; visited: VisitEntry[] }>;
+  userDataBySeed: Record<
+    string,
+    { ratings: Record<string, number>; bookmarks: string[]; visited: VisitEntry[] }
+  >;
 
   // ── ui
   ui: UIState;

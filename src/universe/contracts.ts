@@ -60,9 +60,12 @@ export function levelForAbsMag(absMag: number): number {
 
 /** [brightEdge, faintEdge) of a level's band in absolute magnitude (±Infinity at the open ends). */
 export function levelBand(level: number): readonly [number, number] {
-  const faint = level === 0 ? Number.POSITIVE_INFINITY : LEVEL0_BRIGHT_EDGE_MAG - (level - 1) * LEVEL_BAND_MAG;
+  const faint =
+    level === 0 ? Number.POSITIVE_INFINITY : LEVEL0_BRIGHT_EDGE_MAG - (level - 1) * LEVEL_BAND_MAG;
   const bright =
-    level >= CATALOG_LEVELS - 1 ? Number.NEGATIVE_INFINITY : LEVEL0_BRIGHT_EDGE_MAG - level * LEVEL_BAND_MAG;
+    level >= CATALOG_LEVELS - 1
+      ? Number.NEGATIVE_INFINITY
+      : LEVEL0_BRIGHT_EDGE_MAG - level * LEVEL_BAND_MAG;
   return [bright, faint];
 }
 

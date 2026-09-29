@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { fmix32, hash1, hash2, hash3, hash4, hash32, hashFloat, hashString, hashToUnit } from './hash';
+import {
+  fmix32,
+  hash1,
+  hash2,
+  hash3,
+  hash4,
+  hash32,
+  hashFloat,
+  hashString,
+  hashToUnit,
+} from './hash';
 
 function popcount(x: number): number {
   let v = x >>> 0;

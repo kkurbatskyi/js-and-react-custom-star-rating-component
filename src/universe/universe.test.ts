@@ -12,7 +12,8 @@ const universe = getUniverse();
 const homeId = universe.homeStarId();
 const homeSystem = universe.getSystem(homeId) as StarSystem;
 const homeStar = homeSystem.star;
-const dist = (a: readonly number[], b: readonly number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+const dist = (a: readonly number[], b: readonly number[]) =>
+  Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
 /** Kepler III computed independently of the implementation. */
 const keplerDays = (aKm: number, massKg: number) =>
@@ -30,7 +31,10 @@ function assertComplete(value: unknown, path: string): void {
 /** Physics & completeness checks every generated body must pass. */
 function checkBody(body: BodyBase, centralMassKg: number, starAU: number, L: number): void {
   assertComplete(body, body.id);
-  expect(body.orbit.periodDays).toBeCloseTo(keplerDays(body.orbit.semiMajorAxisKm, centralMassKg), 6);
+  expect(body.orbit.periodDays).toBeCloseTo(
+    keplerDays(body.orbit.semiMajorAxisKm, centralMassKg),
+    6,
+  );
   const teq = 278.6 * L ** 0.25 * starAU ** -0.5 * (1 - body.albedo) ** 0.25;
   expect(body.equilibriumTempK).toBeCloseTo(teq, 9);
   expect(body.surfaceTempK).toBeCloseTo(teq + (body.atmosphere?.greenhouseK ?? 0), 9);
@@ -61,7 +65,8 @@ function checkSystem(system: StarSystem): void {
     expect(p.id).toBe(`${system.id}.${String.fromCharCode(98 + i)}`);
     const aAU = p.orbit.semiMajorAxisKm / KM_PER_AU;
     checkBody(p, starMassKg, aAU, L);
-    if (i > 0) expect(p.orbit.semiMajorAxisKm).toBeGreaterThan(system.planets[i - 1].orbit.semiMajorAxisKm);
+    if (i > 0)
+      expect(p.orbit.semiMajorAxisKm).toBeGreaterThan(system.planets[i - 1].orbit.semiMajorAxisKm);
     outer = Math.max(outer, p.orbit.semiMajorAxisKm * (1 + p.orbit.eccentricity));
     p.moons.forEach((m, j) => {
       expect(m.id).toBe(`${p.id}.${j + 1}`);
@@ -73,7 +78,10 @@ function checkSystem(system: StarSystem): void {
     expect(universe.getBody(p.id)).toEqual({ system, planet: p, moon: null });
   });
   for (const b of system.belts) outer = Math.max(outer, b.outerRadiusKm);
-  expect(system.radiusKm).toBeCloseTo(Math.max(1.5 * outer, 2000 * system.star.radiusKm, KM_PER_AU), 3);
+  expect(system.radiusKm).toBeCloseTo(
+    Math.max(1.5 * outer, 2000 * system.star.radiusKm, KM_PER_AU),
+    3,
+  );
   expect(system.blurb.length).toBeGreaterThan(20);
   const q = system.eclipticToGalactic;
   expect(Math.hypot(q[0], q[1], q[2], q[3])).toBeCloseTo(1, 12);
@@ -83,7 +91,13 @@ describe('ids', () => {
   it('round-trips canonical star, planet and moon ids', () => {
     const id = formatStarId(3, [101, -1, 14], 7);
     expect(id).toBe('3.101.-1.14.7');
-    expect(parseId(id)).toEqual({ kind: 'star', starId: id, level: 3, cell: [101, -1, 14], index: 7 });
+    expect(parseId(id)).toEqual({
+      kind: 'star',
+      starId: id,
+      level: 3,
+      cell: [101, -1, 14],
+      index: 7,
+    });
     expect(parseId(`${id}.c`)).toMatchObject({ kind: 'planet', starId: id, planetIndex: 1 });
     expect(parseId(`${id}.c.2`)).toMatchObject({ kind: 'moon', planetId: `${id}.c`, moonIndex: 1 });
     expect(starIdOf(`${id}.c.2`)).toBe(id);
@@ -117,7 +131,12 @@ describe('catalogue', () => {
   });
 
   it('puts Aurelia, a G2V star, at the galaxy home as the first star of its cell', () => {
-    expect(homeStar).toMatchObject({ name: 'Aurelia', spectralType: 'G2V', spectralClass: 'G', kind: 'main-sequence' });
+    expect(homeStar).toMatchObject({
+      name: 'Aurelia',
+      spectralType: 'G2V',
+      spectralClass: 'G',
+      kind: 'main-sequence',
+    });
     expect(homeStar.posLy).toEqual(universe.galaxy.params.homeLy);
     expect(parseId(homeId)).toMatchObject({ kind: 'star', index: 0 });
     expect(homeStar.temperatureK).toBeGreaterThan(5700);
@@ -127,7 +146,12 @@ describe('catalogue', () => {
   it('reserves 8.0.0.0.0 for the core black hole', () => {
     expect(universe.coreStarId()).toBe('8.0.0.0.0');
     const core = universe.getStar('8.0.0.0.0');
-    expect(core).toMatchObject({ kind: 'black-hole', spectralClass: 'X', posLy: [0, 0, 0], temperatureK: 0 });
+    expect(core).toMatchObject({
+      kind: 'black-hole',
+      spectralClass: 'X',
+      posLy: [0, 0, 0],
+      temperatureK: 0,
+    });
     expect(universe.getSystem('8.0.0.0.0')?.planets).toEqual([]);
   });
 
@@ -141,9 +165,12 @@ describe('catalogue', () => {
       const size = cellSizeLy(s.level);
       expect(s.cell).toEqual(s.posLy.map((x) => Math.floor(x / size)));
       expect(s.id).toBe(formatStarId(s.level, s.cell, s.index));
-      expect(s.seed).toBe(hash32(hash32(DEFAULT_GALAXY_SEED, s.level, s.cell[0], s.cell[1], s.cell[2]), s.index));
+      expect(s.seed).toBe(
+        hash32(hash32(DEFAULT_GALAXY_SEED, s.level, s.cell[0], s.cell[1], s.cell[2]), s.index),
+      );
       expect(Math.max(...s.colorRGB)).toBeCloseTo(1, 6);
-      if (s.id !== catalog.coreId) expect(dist(s.posLy, homeStar.posLy)).toBeLessThanOrEqual(MOCK_RADIUS_LY);
+      if (s.id !== catalog.coreId)
+        expect(dist(s.posLy, homeStar.posLy)).toBeLessThanOrEqual(MOCK_RADIUS_LY);
       const block = catalog.blocks.get(s.id.slice(0, s.id.lastIndexOf('.')));
       expect(block?.absMag[s.index]).toBeCloseTo(s.absMag, 4);
       expect(STAR_KINDS[block?.kind[s.index] ?? -1]).toBe(s.kind);
@@ -190,14 +217,27 @@ describe('catalogue', () => {
 
 describe('home system', () => {
   it('has the seven hand-authored worlds in orbital order', () => {
-    const types: PlanetType[] = ['lava', 'barren', 'terran', 'desert', 'gas-giant', 'ice-giant', 'dwarf'];
+    const types: PlanetType[] = [
+      'lava',
+      'barren',
+      'terran',
+      'desert',
+      'gas-giant',
+      'ice-giant',
+      'dwarf',
+    ];
     expect(homeSystem.planets.map((p) => p.type)).toEqual(types);
     expect(homeSystem.belts).toHaveLength(2);
   });
 
   it('has a living, temperate Halcyon with one moon', () => {
     const halcyon = homeSystem.planets[2];
-    expect(halcyon).toMatchObject({ name: 'Halcyon', properName: 'Halcyon', life: 'vegetation', inHabitableZone: true });
+    expect(halcyon).toMatchObject({
+      name: 'Halcyon',
+      properName: 'Halcyon',
+      life: 'vegetation',
+      inHabitableZone: true,
+    });
     expect(halcyon.moons.map((m) => m.name)).toEqual(['Lanthorn']);
     expect(halcyon.surfaceTempK).toBeGreaterThan(280);
     expect(halcyon.surfaceTempK).toBeLessThan(295);
@@ -229,7 +269,9 @@ describe('home system', () => {
 });
 
 describe('procedural systems', () => {
-  const locals = createMockCatalog(universe.galaxy).stars.filter((s) => s.id !== universe.coreStarId());
+  const locals = createMockCatalog(universe.galaxy).stars.filter(
+    (s) => s.id !== universe.coreStarId(),
+  );
 
   it('give every local star a valid, visitable system', () => {
     for (const s of locals) {
@@ -241,20 +283,36 @@ describe('procedural systems', () => {
 
   it('cover every planet type somewhere in the neighbourhood', () => {
     const types = new Set<PlanetType>();
-    for (const s of locals) for (const p of universe.getSystem(s.id)?.planets ?? []) types.add(p.type);
+    for (const s of locals)
+      for (const p of universe.getSystem(s.id)?.planets ?? []) types.add(p.type);
     expect([...types].sort()).toEqual(
-      ['barren', 'desert', 'dwarf', 'gas-giant', 'hothouse', 'ice', 'ice-giant', 'lava', 'ocean', 'terran'].sort(),
+      [
+        'barren',
+        'desert',
+        'dwarf',
+        'gas-giant',
+        'hothouse',
+        'ice',
+        'ice-giant',
+        'lava',
+        'ocean',
+        'terran',
+      ].sort(),
     );
   });
 });
 
 describe('queries', () => {
   it('queryBlocks returns the cells around the observer, level by level', () => {
-    const { blocks, pending } = universe.queryBlocks({ observerLy: homeStar.posLy, magnitudeLimit: 6.5 });
+    const { blocks, pending } = universe.queryBlocks({
+      observerLy: homeStar.posLy,
+      magnitudeLimit: 6.5,
+    });
     expect(pending).toBe(0);
     const homeKey = homeId.slice(0, homeId.lastIndexOf('.'));
     expect(blocks.some((b) => b.key === homeKey)).toBe(true);
-    for (let i = 1; i < blocks.length; i++) expect(blocks[i].level).toBeGreaterThanOrEqual(blocks[i - 1].level);
+    for (let i = 1; i < blocks.length; i++)
+      expect(blocks[i].level).toBeGreaterThanOrEqual(blocks[i - 1].level);
     const all = universe.queryBlocks({ observerLy: homeStar.posLy, magnitudeLimit: 40 }).blocks;
     expect(all.reduce((n, b) => n + b.count, 0)).toBe(302);
   });
@@ -266,7 +324,10 @@ describe('queries', () => {
     expect(stars[0].id).toBe(homeId); // at distance ~0 nothing outshines the home star
     for (const s of stars) expect(dist(s.posLy, centre)).toBeLessThanOrEqual(25);
     expect(universe.queryStars(centre, 25, { limit: 2 })).toHaveLength(2);
-    const bright = universe.queryStars(centre, 80, { magnitudeLimit: 4, observerLy: [centre[0] + 0.5, centre[1], centre[2]] });
+    const bright = universe.queryStars(centre, 80, {
+      magnitudeLimit: 4,
+      observerLy: [centre[0] + 0.5, centre[1], centre[2]],
+    });
     expect(bright.length).toBeLessThan(universe.queryStars(centre, 80).length);
   });
 
@@ -279,7 +340,10 @@ describe('queries', () => {
 
 describe('search', () => {
   it('finds stars by name prefix, case-insensitively', () => {
-    expect(universe.search('aurel')[0]).toMatchObject({ ref: { kind: 'star', id: homeId }, name: 'Aurelia' });
+    expect(universe.search('aurel')[0]).toMatchObject({
+      ref: { kind: 'star', id: homeId },
+      name: 'Aurelia',
+    });
     expect(universe.search('AURELIA')[0].subtitle).toContain('G2V');
     expect(universe.search('   ')).toEqual([]);
   });
@@ -287,14 +351,19 @@ describe('search', () => {
   it('finds home planets and moons, exact ids and designations', () => {
     expect(universe.search('halcyon')[0].ref).toEqual({ kind: 'planet', id: `${homeId}.d` });
     expect(universe.search('lanthorn')[0].ref).toEqual({ kind: 'moon', id: `${homeId}.d.1` });
-    expect(universe.search(homeId)[0]).toMatchObject({ ref: { kind: 'star', id: homeId }, score: 1000 });
+    expect(universe.search(homeId)[0]).toMatchObject({
+      ref: { kind: 'star', id: homeId },
+      score: 1000,
+    });
     const other = universe.queryStars(homeStar.posLy, 30)[3];
     expect(universe.search(other.designation)[0].ref.id).toBe(other.id);
     expect(universe.search('lia').length).toBeGreaterThan(0); // substring
   });
 
   it('remember() makes a system searchable', () => {
-    const star = universe.queryStars(homeStar.posLy, 60).find((s) => s.id !== homeId && s.name !== s.designation);
+    const star = universe
+      .queryStars(homeStar.posLy, 60)
+      .find((s) => s.id !== homeId && s.name !== s.designation);
     const planet = star ? universe.getSystem(star.id)?.planets[0] : undefined;
     if (!planet) throw new Error('fixture');
     universe.remember(planet.id);

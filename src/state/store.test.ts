@@ -3,13 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FocusTarget } from '../core/types';
 import { simDaysNow } from '../sim/time';
 import { DEFAULT_GALAXY_SEED, getUniverse } from '../universe';
+import { GEN_VERSION } from '../universe/contracts';
 import {
   DEFAULT_TIME_SCALE,
   MAX_TIME_SCALE,
   MAX_TOASTS,
   MAX_VISITED,
-  STORAGE_KEY,
+  migratePersisted,
   parentFocus,
+  STORAGE_KEY,
   sanitizePersisted,
   store,
   useStore,
@@ -70,6 +72,10 @@ describe('defaults', () => {
     expect(s.focus).toEqual({ kind: 'galaxy', centerLy: [0, 0, 0] });
     expect(s.level).toBe('galaxy');
     expect(s.navRequest).toBeNull();
+    expect(s.timeRequest).toBeNull();
+    expect(s.flightTarget).toBeNull();
+    expect(s.cameraLy).toEqual([0, 0, 0]);
+    expect(s.userDataBySeed).toEqual({});
     expect(s.ready).toBe(false);
     expect(Math.abs(s.simDays - simDaysNow())).toBeLessThan(1);
     expect(s.ui.open).toEqual({ search: false, help: false, settings: false, logbook: false });
@@ -132,7 +138,19 @@ describe('navigation', () => {
   });
 
   it('parentFocus falls back to the galactic centre for unknown stars', () => {
-    expect(parentFocus({ kind: 'star', id: '9.9.9.999' }, universe)).toEqual({ kind: 'galaxy', centerLy: [0, 0, 0] });
+    expect(parentFocus({ kind: 'star', id: '0.9.9.9.999' }, universe)).toEqual({
+      kind: 'galaxy',
+      centerLy: [0, 0, 0],
+    });
+  });
+
+  it('goUp climbs from the flight destination when no request is pending', () => {
+    store.setState({
+      focus: { kind: 'star', id: homeId },
+      flightTarget: { kind: 'planet', id: halcyon.id },
+    });
+    act().goUp();
+    expect(act().navRequest?.target).toEqual({ kind: 'star', id: homeId });
   });
 });
 
@@ -166,6 +184,21 @@ describe('time', () => {
     expect(act().timeScale).toBe(MAX_TIME_SCALE);
   });
 
+  it('requestTime issues monotonic clock requests; consumeTimeRequest clears the matching one', () => {
+    act().requestTime(10_000);
+    const first = act().timeRequest;
+    expect(first?.simDays).toBe(10_000);
+    act().requestTime(Number.NaN);
+    expect(act().timeRequest).toBe(first);
+    act().requestTime(12_000);
+    const second = act().timeRequest;
+    expect(second?.seq).toBe((first?.seq ?? 0) + 1);
+    act().consumeTimeRequest(first?.seq ?? -1);
+    expect(act().timeRequest).toBe(second);
+    act().consumeTimeRequest(second?.seq ?? -1);
+    expect(act().timeRequest).toBeNull();
+  });
+
   it('togglePause flips paused', () => {
     act().togglePause();
     expect(act().paused).toBe(true);
@@ -187,7 +220,12 @@ describe('ratings, bookmarks, logbook', () => {
   it('rating a far-away planet makes its system searchable', () => {
     const star = universe
       .queryStars(universe.getStar(homeId)?.posLy ?? [0, 0, 0], 80)
-      .find((s) => s.id !== homeId && s.name !== s.designation && (universe.getSystem(s.id)?.planets.length ?? 0) > 0);
+      .find(
+        (s) =>
+          s.id !== homeId &&
+          s.name !== s.designation &&
+          (universe.getSystem(s.id)?.planets.length ?? 0) > 0,
+      );
     const planet = star ? universe.getSystem(star.id)?.planets[0] : undefined;
     if (!planet) throw new Error('no mock planet found');
     act().rate(planet.id, 4);
@@ -231,7 +269,13 @@ describe('ratings, bookmarks, logbook', () => {
 describe('settings', () => {
   it('updateSettings merges, validates and clamps', () => {
     act().updateSettings({ bloom: 5, volume: -1, quality: 'high', labels: false });
-    expect(act().settings).toMatchObject({ bloom: 2, volume: 0, quality: 'high', labels: false, orbits: true });
+    expect(act().settings).toMatchObject({
+      bloom: 2,
+      volume: 0,
+      quality: 'high',
+      labels: false,
+      orbits: true,
+    });
     // @ts-expect-error — runtime validation of untrusted input
     act().updateSettings({ quality: 'insane', bloom: 'lots' });
     expect(act().settings.quality).toBe('high');
@@ -242,6 +286,22 @@ describe('settings', () => {
     expect(notifications(() => act().updateSettings({ labels: true, bloom: 1 }))).toBe(0);
   });
 
+  it('switching seeds stashes and restores per-seed user data', () => {
+    act().rate('a', 5);
+    act().toggleBookmark('b');
+    act().updateSettings({ galaxySeed: 42 });
+    expect(act()).toMatchObject({ ratings: {}, bookmarks: [], visited: [] });
+    expect(act().userDataBySeed[String(DEFAULT_GALAXY_SEED)]).toMatchObject({
+      ratings: { a: 5 },
+      bookmarks: ['b'],
+    });
+    act().rate('x', 2);
+    act().updateSettings({ galaxySeed: DEFAULT_GALAXY_SEED });
+    expect(act()).toMatchObject({ ratings: { a: 5 }, bookmarks: ['b'] });
+    expect(Object.keys(act().userDataBySeed)).toEqual(['42']);
+    expect(act().userDataBySeed['42'].ratings).toEqual({ x: 2 });
+  });
+
   it('a new galaxy seed drops stale ids and jumps to the galactic centre', () => {
     act().select({ kind: 'star', id: homeId });
     act().setHover({ kind: 'star', id: homeId });
@@ -250,7 +310,10 @@ describe('settings', () => {
     expect(s.settings.galaxySeed).toBe(42);
     expect(s.selection).toBeNull();
     expect(s.hover).toBeNull();
-    expect(s.navRequest).toMatchObject({ target: { kind: 'galaxy', centerLy: [0, 0, 0] }, mode: 'jump' });
+    expect(s.navRequest).toMatchObject({
+      target: { kind: 'galaxy', centerLy: [0, 0, 0] },
+      mode: 'jump',
+    });
   });
 });
 
@@ -289,13 +352,40 @@ describe('ui', () => {
 
 describe('engine bridge', () => {
   it('setFromEngine applies changes and skips no-op updates', () => {
-    act().setFromEngine({ level: 'system', focus: { kind: 'star', id: homeId }, cameraDistanceKm: 1e8, ready: true });
-    expect(act()).toMatchObject({ level: 'system', focus: { kind: 'star', id: homeId }, cameraDistanceKm: 1e8, ready: true });
+    act().setFromEngine({
+      level: 'system',
+      focus: { kind: 'star', id: homeId },
+      cameraDistanceKm: 1e8,
+      ready: true,
+    });
+    expect(act()).toMatchObject({
+      level: 'system',
+      focus: { kind: 'star', id: homeId },
+      cameraDistanceKm: 1e8,
+      ready: true,
+    });
+    act().setFromEngine({ cameraLy: [1, 2, 3], flightTarget: { kind: 'planet', id: halcyon.id } });
+    expect(act()).toMatchObject({
+      cameraLy: [1, 2, 3],
+      flightTarget: { kind: 'planet', id: halcyon.id },
+    });
     const n = notifications(() =>
-      act().setFromEngine({ level: 'system', focus: { kind: 'star', id: homeId }, cameraDistanceKm: 1e8 }),
+      act().setFromEngine({
+        level: 'system',
+        focus: { kind: 'star', id: homeId },
+        cameraDistanceKm: 1e8,
+        cameraLy: [1, 2, 3],
+        flightTarget: { kind: 'planet', id: halcyon.id },
+      }),
     );
     expect(n).toBe(0);
-    act().setFromEngine({ boot: { progress: 0.5, message: 'Igniting stars…' }, flightProgress: 0.25, simDays: 12 });
+    act().setFromEngine({ flightTarget: null });
+    expect(act().flightTarget).toBeNull();
+    act().setFromEngine({
+      boot: { progress: 0.5, message: 'Igniting stars…' },
+      flightProgress: 0.25,
+      simDays: 12,
+    });
     expect(act()).toMatchObject({ boot: { progress: 0.5 }, flightProgress: 0.25, simDays: 12 });
   });
 });
@@ -309,10 +399,22 @@ describe('persistence', () => {
     act().updateSettings({ showFps: true });
     act().requestFocus({ kind: 'star', id: homeId });
     const saved = stored();
-    expect(saved?.version).toBe(1);
+    expect(saved?.version).toBe(GEN_VERSION);
     const state = saved?.state as Record<string, unknown>;
-    expect(Object.keys(state).sort()).toEqual(['bookmarks', 'onboardingSeen', 'ratings', 'settings', 'visited']);
-    expect(state).toMatchObject({ ratings: { a: 4 }, bookmarks: ['b'], onboardingSeen: true, settings: { showFps: true } });
+    expect(Object.keys(state).sort()).toEqual([
+      'bookmarks',
+      'onboardingSeen',
+      'ratings',
+      'settings',
+      'userDataBySeed',
+      'visited',
+    ]);
+    expect(state).toMatchObject({
+      ratings: { a: 4 },
+      bookmarks: ['b'],
+      onboardingSeen: true,
+      settings: { showFps: true },
+    });
   });
 
   it('rehydrates and sanitises stored data', async () => {
@@ -324,12 +426,7 @@ describe('persistence', () => {
           settings: { quality: 'ultra', bloom: 99, volume: 0.25, labels: 'yes' },
           ratings: { good: 4, bad: 'x', big: 12 },
           bookmarks: ['a', 'a', 7, 'b'],
-          visited: [
-            { id: 'old', at: 1 },
-            { id: 'new', at: 5 },
-            { id: 'old', at: 3 },
-            { at: 9 },
-          ],
+          visited: [{ id: 'old', at: 1 }, { id: 'new', at: 5 }, { id: 'old', at: 3 }, { at: 9 }],
           onboardingSeen: true,
         },
       }),
@@ -347,6 +444,25 @@ describe('persistence', () => {
     expect(s.ui.open.search).toBe(false); // non-persisted UI state survives the merge
   });
 
+  it('drops user data written by another generator version but keeps settings', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        version: GEN_VERSION + 1,
+        state: {
+          settings: { bloom: 1.5 },
+          ratings: { old: 3 },
+          userDataBySeed: { 7: { ratings: { z: 1 } } },
+        },
+      }),
+    );
+    await store.persist.rehydrate();
+    expect(act().settings.bloom).toBe(1.5);
+    expect(act().ratings).toEqual({});
+    expect(act().userDataBySeed).toEqual({});
+    expect(migratePersisted({ ratings: { a: 2 } }, GEN_VERSION).ratings).toEqual({ a: 2 });
+  });
+
   it('ignores corrupt storage', async () => {
     localStorage.setItem(STORAGE_KEY, '{not json');
     await store.persist.rehydrate();
@@ -362,7 +478,7 @@ describe('persistence', () => {
     });
     expect(() => act().rate('a', 3)).not.toThrow();
     expect(act().ratings.a).toBe(3);
-    await expect(store.persist.rehydrate()).resolves.toBeUndefined();
+    await expect(Promise.resolve(store.persist.rehydrate())).resolves.toBeUndefined();
   });
 
   it('sanitizePersisted caps the logbook', () => {
@@ -371,5 +487,9 @@ describe('persistence', () => {
     expect(p.visited).toHaveLength(MAX_VISITED);
     expect(p.visited[0]).toEqual({ id: `s${MAX_VISITED + 49}`, at: MAX_VISITED + 49 });
     expect(sanitizePersisted(null).settings.galaxySeed).toBe(DEFAULT_GALAXY_SEED);
+    const stash = sanitizePersisted({
+      userDataBySeed: { 12: { bookmarks: ['q'] }, nope: {}, 13: {} },
+    }).userDataBySeed;
+    expect(Object.keys(stash)).toEqual(['12']);
   });
 });

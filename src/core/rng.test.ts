@@ -152,7 +152,9 @@ describe('createRng', () => {
   });
 
   it('fork(label) = createRng(hash32(seed, label hash))', () => {
-    expect(createRng(42).fork('planet').next()).toBe(createRng(hash32(42, hashString('planet'))).next());
+    expect(createRng(42).fork('planet').next()).toBe(
+      createRng(hash32(42, hashString('planet'))).next(),
+    );
     expect(createRng(42).fork(3).next()).toBe(createRng(hash32(42, 3)).next());
     expect(createRng(42).fork('planet').uint32()).toBe(3336638367);
     expect(createRng(42).fork(3).uint32()).toBe(3992018385);

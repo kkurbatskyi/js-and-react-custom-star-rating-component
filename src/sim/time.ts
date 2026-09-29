@@ -3,7 +3,13 @@
  * app starts at the real current date and advances by `timeScale` sim-seconds per real second.
  */
 import { formatTimeScale } from '../core/format';
-import { DAYS_PER_MONTH, J2000_UNIX_MS, MS_PER_DAY, SECONDS_PER_DAY, SECONDS_PER_YEAR } from '../core/units';
+import {
+  DAYS_PER_MONTH,
+  J2000_UNIX_MS,
+  MS_PER_DAY,
+  SECONDS_PER_DAY,
+  SECONDS_PER_YEAR,
+} from '../core/units';
 
 /** Days since J2000 for a Unix timestamp (default: now). */
 export function simDaysNow(nowMs: number = Date.now()): number {
@@ -51,7 +57,9 @@ const PRESET_VALUES: readonly number[] = [
 
 /** Ordered time-scale presets, slowest first (index 0 = paused). */
 export const TIME_SCALES: readonly TimeScalePreset[] = Object.freeze(
-  PRESET_VALUES.map((secondsPerSecond) => Object.freeze({ label: formatTimeScale(secondsPerSecond), secondsPerSecond })),
+  PRESET_VALUES.map((secondsPerSecond) =>
+    Object.freeze({ label: formatTimeScale(secondsPerSecond), secondsPerSecond }),
+  ),
 );
 
 /** Index of the preset closest to `secondsPerSecond` (compared logarithmically; ≤ 0 → paused). */
@@ -76,7 +84,8 @@ export function nearestTimeScaleIndex(secondsPerSecond: number): number {
  */
 export function stepTimeScale(secondsPerSecond: number, direction: 1 | -1): number {
   if (direction > 0) {
-    for (const p of TIME_SCALES) if (p.secondsPerSecond > secondsPerSecond * (1 + 1e-9)) return p.secondsPerSecond;
+    for (const p of TIME_SCALES)
+      if (p.secondsPerSecond > secondsPerSecond * (1 + 1e-9)) return p.secondsPerSecond;
     return (TIME_SCALES[TIME_SCALES.length - 1] as TimeScalePreset).secondsPerSecond;
   }
   for (let i = TIME_SCALES.length - 1; i >= 0; i--) {

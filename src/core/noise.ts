@@ -17,8 +17,8 @@ const F3 = 1 / 3;
 const G3 = 1 / 6;
 /** The 12 cube-edge gradient directions (x, y, z interleaved). */
 const GRAD3 = new Float64Array([
-  1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1, 0, 1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, -1, 0, 1, 1, 0, -1, 1, 0, 1, -1, 0, -1,
-  -1,
+  1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1, 0, 1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, -1, 0, 1, 1, 0, -1, 1,
+  0, 1, -1, 0, -1, -1,
 ]);
 
 /** Seeded 3D simplex noise: range ≈ [−1, 1], mean 0, feature size ≈ 1 unit. */
@@ -54,18 +54,48 @@ export function createNoise3(seed: number): Noise3 {
     let k2: number;
     if (x0 >= y0) {
       if (y0 >= z0) {
-        i1 = 1; j1 = 0; k1 = 0; i2 = 1; j2 = 1; k2 = 0;
+        i1 = 1;
+        j1 = 0;
+        k1 = 0;
+        i2 = 1;
+        j2 = 1;
+        k2 = 0;
       } else if (x0 >= z0) {
-        i1 = 1; j1 = 0; k1 = 0; i2 = 1; j2 = 0; k2 = 1;
+        i1 = 1;
+        j1 = 0;
+        k1 = 0;
+        i2 = 1;
+        j2 = 0;
+        k2 = 1;
       } else {
-        i1 = 0; j1 = 0; k1 = 1; i2 = 1; j2 = 0; k2 = 1;
+        i1 = 0;
+        j1 = 0;
+        k1 = 1;
+        i2 = 1;
+        j2 = 0;
+        k2 = 1;
       }
     } else if (y0 < z0) {
-      i1 = 0; j1 = 0; k1 = 1; i2 = 0; j2 = 1; k2 = 1;
+      i1 = 0;
+      j1 = 0;
+      k1 = 1;
+      i2 = 0;
+      j2 = 1;
+      k2 = 1;
     } else if (x0 < z0) {
-      i1 = 0; j1 = 1; k1 = 0; i2 = 0; j2 = 1; k2 = 1;
+      i1 = 0;
+      j1 = 1;
+      k1 = 0;
+      i2 = 0;
+      j2 = 1;
+      k2 = 1;
     } else {
-      i1 = 0; j1 = 1; k1 = 0; i2 = 1; j2 = 1; k2 = 0;
+      i1 = 0;
+      j1 = 1;
+      k1 = 0;
+      i2 = 1;
+      j2 = 1;
+      k2 = 0;
     }
 
     const x1 = x0 - i1 + G3;
@@ -87,25 +117,37 @@ export function createNoise3(seed: number): Noise3 {
     if (t0 > 0) {
       const g = permGrad[ii + (perm[jj + (perm[kk] as number)] as number)] as number;
       t0 *= t0;
-      n += t0 * t0 * ((GRAD3[g] as number) * x0 + (GRAD3[g + 1] as number) * y0 + (GRAD3[g + 2] as number) * z0);
+      n +=
+        t0 *
+        t0 *
+        ((GRAD3[g] as number) * x0 + (GRAD3[g + 1] as number) * y0 + (GRAD3[g + 2] as number) * z0);
     }
     let t1 = 0.6 - x1 * x1 - y1 * y1 - z1 * z1;
     if (t1 > 0) {
       const g = permGrad[ii + i1 + (perm[jj + j1 + (perm[kk + k1] as number)] as number)] as number;
       t1 *= t1;
-      n += t1 * t1 * ((GRAD3[g] as number) * x1 + (GRAD3[g + 1] as number) * y1 + (GRAD3[g + 2] as number) * z1);
+      n +=
+        t1 *
+        t1 *
+        ((GRAD3[g] as number) * x1 + (GRAD3[g + 1] as number) * y1 + (GRAD3[g + 2] as number) * z1);
     }
     let t2 = 0.6 - x2 * x2 - y2 * y2 - z2 * z2;
     if (t2 > 0) {
       const g = permGrad[ii + i2 + (perm[jj + j2 + (perm[kk + k2] as number)] as number)] as number;
       t2 *= t2;
-      n += t2 * t2 * ((GRAD3[g] as number) * x2 + (GRAD3[g + 1] as number) * y2 + (GRAD3[g + 2] as number) * z2);
+      n +=
+        t2 *
+        t2 *
+        ((GRAD3[g] as number) * x2 + (GRAD3[g + 1] as number) * y2 + (GRAD3[g + 2] as number) * z2);
     }
     let t3 = 0.6 - x3 * x3 - y3 * y3 - z3 * z3;
     if (t3 > 0) {
       const g = permGrad[ii + 1 + (perm[jj + 1 + (perm[kk + 1] as number)] as number)] as number;
       t3 *= t3;
-      n += t3 * t3 * ((GRAD3[g] as number) * x3 + (GRAD3[g + 1] as number) * y3 + (GRAD3[g + 2] as number) * z3);
+      n +=
+        t3 *
+        t3 *
+        ((GRAD3[g] as number) * x3 + (GRAD3[g + 1] as number) * y3 + (GRAD3[g + 2] as number) * z3);
     }
     return 32 * n;
   };
@@ -113,8 +155,8 @@ export function createNoise3(seed: number): Noise3 {
 
 // Per-octave domain offsets: decorrelate octaves (otherwise every octave is 0 at the origin).
 const OCTAVE_OFFSETS = new Float64Array([
-  0, 0, 0, 31.416, 17.23, -5.87, -12.71, 43.19, 21.4, 7.77, -29.1, 38.3, 53.2, 11.9, -44.6, -21.3, -7.4, 15.8, 19.9,
-  -37.2, 29.6, 45.5, 27.1, 9.3,
+  0, 0, 0, 31.416, 17.23, -5.87, -12.71, 43.19, 21.4, 7.77, -29.1, 38.3, 53.2, 11.9, -44.6, -21.3,
+  -7.4, 15.8, 19.9, -37.2, 29.6, 45.5, 27.1, 9.3,
 ]);
 const MAX_OCTAVES = OCTAVE_OFFSETS.length / 3;
 

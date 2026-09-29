@@ -32,7 +32,13 @@ export function invLerp(a: number, b: number, x: number): number {
 }
 
 /** Linearly map x from [inMin, inMax] to [outMin, outMax] (unclamped). */
-export function remap(x: number, inMin: number, inMax: number, outMin: number, outMax: number): number {
+export function remap(
+  x: number,
+  inMin: number,
+  inMax: number,
+  outMin: number,
+  outMax: number,
+): number {
   return outMin + (outMax - outMin) * invLerp(inMin, inMax, x);
 }
 
@@ -216,7 +222,10 @@ export function poissonSample(rng: Rng, lambda: number): number {
     const k = Math.floor(((2 * a) / us + b) * u + lambda + 0.43);
     if (us >= 0.07 && v <= vr) return k;
     if (k < 0 || (us < 0.013 && v > us)) continue;
-    if (Math.log(v) + logInvAlpha - Math.log(a / (us * us) + b) <= -lambda + k * logLam - logGamma(k + 1)) {
+    if (
+      Math.log(v) + logInvAlpha - Math.log(a / (us * us) + b) <=
+      -lambda + k * logLam - logGamma(k + 1)
+    ) {
       return k;
     }
   }
@@ -227,7 +236,10 @@ export function poissonSample(rng: Rng, lambda: number): number {
  * Uniformly distributed unit vector (Archimedes: z = 2u − 1 is uniform on the sphere).
  * Writes into `out` and returns it. 2 draws.
  */
-export function sampleUnitVector(rng: Rng, out: [number, number, number]): [number, number, number] {
+export function sampleUnitVector(
+  rng: Rng,
+  out: [number, number, number],
+): [number, number, number] {
   const z = 2 * rng.next() - 1;
   const phi = TAU * rng.next();
   const r = Math.sqrt(Math.max(0, 1 - z * z));

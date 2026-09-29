@@ -70,7 +70,8 @@ export function parseId(id: string): ParsedId | null {
   if (parts.length < 5 || parts.length > 7) return null;
   const [level, cx, cy, cz, i, letter, moon] = parts;
   if (!UNSIGNED_INT.test(level) || Number(level) >= CATALOG_LEVELS) return null;
-  if (!SIGNED_INT.test(cx) || !SIGNED_INT.test(cy) || !SIGNED_INT.test(cz) || !UNSIGNED_INT.test(i)) return null;
+  if (!SIGNED_INT.test(cx) || !SIGNED_INT.test(cy) || !SIGNED_INT.test(cz) || !UNSIGNED_INT.test(i))
+    return null;
   const starId = `${level}.${cx}.${cy}.${cz}.${i}`;
   if (parts.length === 5) {
     return {

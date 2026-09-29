@@ -1,13 +1,17 @@
 /**
  * Global app state — zustand 5 store implementing `AppState` (./contracts.ts).
  *
- *   UI ──actions──▶ store ──navRequest──▶ engine          (engine calls consumeNavRequest(seq))
+ *   UI ──actions──▶ store ──navRequest / timeRequest──▶ engine   (engine calls consume*(seq))
  *   engine ──setFromEngine (≤10 Hz)──▶ store ──▶ UI
  *
- * Persistence: settings, ratings, bookmarks, visited and `ui.onboardingSeen` live in localStorage
- * under `sidereal:v1`. Storage is untrusted and may throw (sandboxed iframes, quota, private
- * mode), so every access is wrapped and every loaded value is validated before use; the app runs
- * fine without storage. Non-React code uses `store.getState()` / `store.subscribe()`.
+ * Persistence (localStorage key `sidereal:v1`, zustand-persist `version` = GEN_VERSION):
+ * settings, `ui.onboardingSeen`, and the user data — ratings, bookmarks, visited — for the current
+ * galaxy seed plus `userDataBySeed` for the others. Ids only mean something within one seed AND
+ * one generator version, so switching seeds stashes/restores the user data, and a GEN_VERSION bump
+ * keeps settings but drops user data that now points at different objects.
+ * Storage is untrusted and may throw (sandboxed iframes, quota, private mode): every access is
+ * wrapped, every loaded value validated, and the app runs fine without storage.
+ * Non-React code uses `store.getState()` / `store.subscribe()`.
  */
 import { create } from 'zustand';
 import { type PersistStorage, persist } from 'zustand/middleware';
@@ -16,13 +20,15 @@ import type { FocusTarget, SelectionRef, Vec3Tuple } from '../core/types';
 import { SECONDS_PER_YEAR } from '../core/units';
 import { simDaysNow } from '../sim/time';
 import { DEFAULT_GALAXY_SEED, getUniverse, planetIdOf, starIdOf } from '../universe';
-import type { Universe } from '../universe/contracts';
+import { GEN_VERSION, type Universe } from '../universe/contracts';
 import type { AppState, NavRequest, QualitySetting, Settings, UIState, VisitEntry } from './contracts';
 
+/** Storage key; the suffix is the storage *schema* version (the generator version is `version`). */
 export const STORAGE_KEY = 'sidereal:v1';
-export const STORAGE_VERSION = 1;
 export const MAX_VISITED = 200;
 export const MAX_BOOKMARKS = 500;
+/** Stashed per-seed user data kept for at most this many other seeds. */
+export const MAX_STASHED_SEEDS = 16;
 /** Oldest toasts are dropped beyond this many. */
 export const MAX_TOASTS = 5;
 /** One simulated hour per real second. */
@@ -32,6 +38,8 @@ export const MAX_TIME_SCALE = 10 * SECONDS_PER_YEAR;
 
 const GALACTIC_CENTRE: Vec3Tuple = [0, 0, 0];
 const QUALITY_SETTINGS: readonly QualitySetting[] = ['auto', 'low', 'medium', 'high', 'ultra'];
+
+export type UserData = AppState['userDataBySeed'][string];
 
 // ───────────────────────────────────────────── Defaults
 
@@ -134,12 +142,31 @@ function sanitizeVisited(v: unknown): VisitEntry[] {
   return out;
 }
 
+function sanitizeUserData(v: unknown): UserData {
+  const r = isRecord(v) ? v : {};
+  return { ratings: sanitizeRatings(r.ratings), bookmarks: sanitizeBookmarks(r.bookmarks), visited: sanitizeVisited(r.visited) };
+}
+
+const isEmptyUserData = (d: UserData): boolean =>
+  Object.keys(d.ratings).length === 0 && d.bookmarks.length === 0 && d.visited.length === 0;
+
+/** Seeds are uint32 decimal strings; empty entries are dropped; at most MAX_STASHED_SEEDS kept. */
+function sanitizeUserDataBySeed(v: unknown): Record<string, UserData> {
+  const out: Record<string, UserData> = {};
+  if (!isRecord(v)) return out;
+  for (const [seed, data] of Object.entries(v)) {
+    if (!/^(0|[1-9]\d{0,9})$/.test(seed) || Number(seed) > 0xffffffff) continue;
+    const clean = sanitizeUserData(data);
+    if (!isEmptyUserData(clean)) out[seed] = clean;
+    if (Object.keys(out).length === MAX_STASHED_SEEDS) break;
+  }
+  return out;
+}
+
 /** The persisted subset of AppState (flat, so versioning and validation stay simple). */
-export interface PersistedSlice {
+export interface PersistedSlice extends UserData {
   settings: Settings;
-  ratings: Record<string, number>;
-  bookmarks: string[];
-  visited: VisitEntry[];
+  userDataBySeed: Record<string, UserData>;
   onboardingSeen: boolean;
 }
 
@@ -147,11 +174,20 @@ export function sanitizePersisted(v: unknown): PersistedSlice {
   const r = isRecord(v) ? v : {};
   return {
     settings: sanitizeSettings(r.settings, defaultSettings()),
-    ratings: sanitizeRatings(r.ratings),
-    bookmarks: sanitizeBookmarks(r.bookmarks),
-    visited: sanitizeVisited(r.visited),
+    ...sanitizeUserData(r),
+    userDataBySeed: sanitizeUserDataBySeed(r.userDataBySeed),
     onboardingSeen: r.onboardingSeen === true,
   };
+}
+
+/**
+ * A different GEN_VERSION generated a different universe: keep settings and onboarding, drop
+ * user data whose ids now point at other objects (or at nothing).
+ */
+export function migratePersisted(persisted: unknown, version: number): PersistedSlice {
+  const p = sanitizePersisted(persisted);
+  if (version === GEN_VERSION) return p;
+  return { ...p, ratings: {}, bookmarks: [], visited: [], userDataBySeed: {} };
 }
 
 // ───────────────────────────────────────────── Storage (never throws)
@@ -174,10 +210,8 @@ function createSafeStorage(): PersistStorage<PersistedSlice> {
         if (raw === null) return null;
         const parsed: unknown = JSON.parse(raw);
         if (!isRecord(parsed)) return null;
-        return {
-          state: sanitizePersisted(parsed.state),
-          version: typeof parsed.version === 'number' ? parsed.version : undefined,
-        };
+        // The version tells `migrate` which generator produced the ids.
+        return { state: sanitizePersisted(parsed.state), version: finite(parsed.version) ?? 0 };
       } catch {
         return null; // corrupt JSON or blocked storage: start from defaults
       }
@@ -192,6 +226,7 @@ function createSafeStorage(): PersistStorage<PersistedSlice> {
         s.ratings === last.ratings &&
         s.bookmarks === last.bookmarks &&
         s.visited === last.visited &&
+        s.userDataBySeed === last.userDataBySeed &&
         s.onboardingSeen === last.onboardingSeen
       ) {
         return;
@@ -219,22 +254,18 @@ function createSafeStorage(): PersistStorage<PersistedSlice> {
 const sameRef = (a: SelectionRef | null, b: SelectionRef | null): boolean =>
   a === b || (a !== null && b !== null && a.kind === b.kind && a.id === b.id);
 
-function sameFocus(a: FocusTarget, b: FocusTarget): boolean {
+const sameTuple = (a: Vec3Tuple, b: Vec3Tuple): boolean => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+
+function sameFocus(a: FocusTarget | null, b: FocusTarget | null): boolean {
+  if (a === b) return true;
+  if (a === null || b === null) return false;
   if (a.kind === 'galaxy' || b.kind === 'galaxy') {
-    return (
-      a.kind === 'galaxy' &&
-      b.kind === 'galaxy' &&
-      a.centerLy[0] === b.centerLy[0] &&
-      a.centerLy[1] === b.centerLy[1] &&
-      a.centerLy[2] === b.centerLy[2]
-    );
+    return a.kind === 'galaxy' && b.kind === 'galaxy' && sameTuple(a.centerLy, b.centerLy);
   }
   return a.kind === b.kind && a.id === b.id;
 }
 
-function isGalacticCentre(t: FocusTarget): boolean {
-  return t.kind === 'galaxy' && t.centerLy[0] === 0 && t.centerLy[1] === 0 && t.centerLy[2] === 0;
-}
+const isGalacticCentre = (t: FocusTarget): boolean => t.kind === 'galaxy' && sameTuple(t.centerLy, GALACTIC_CENTRE);
 
 /** One level up: moon → planet → star → galaxy (centred on the star) → galactic centre. */
 export function parentFocus(target: FocusTarget, universe: Universe): FocusTarget | null {
@@ -248,7 +279,7 @@ export function parentFocus(target: FocusTarget, universe: Universe): FocusTarge
       return starId ? { kind: 'star', id: starId } : { kind: 'galaxy', centerLy: GALACTIC_CENTRE };
     }
     case 'star': {
-      const pos = universe.getStar(target.id)?.posLy ?? GALACTIC_CENTRE;
+      const pos = universe.getRecord(target.id)?.posLy ?? GALACTIC_CENTRE;
       return { kind: 'galaxy', centerLy: [pos[0], pos[1], pos[2]] };
     }
     case 'galaxy':
@@ -263,8 +294,9 @@ const selectionFor = (target: FocusTarget): SelectionRef | null =>
 
 type EnginePatch = Parameters<AppState['setFromEngine']>[0];
 
-/** Monotonic counters live outside the state so resets cannot make `seq` go backwards. */
+/** Monotonic counters live outside the state so resets can never make a `seq` go backwards. */
 let navSeq = 0;
+let timeSeq = 0;
 let toastSeq = 0;
 
 const nextNav = (target: FocusTarget, mode: NavRequest['mode']): NavRequest => {
@@ -272,11 +304,13 @@ const nextNav = (target: FocusTarget, mode: NavRequest['mode']): NavRequest => {
   return { target, mode, seq: navSeq };
 };
 
-/** Make user-touched ids searchable (ratings may be keyed by planet ids; `remember` handles both). */
+/** Make user-touched ids searchable (star, planet or moon ids). */
 function rememberIds(seed: number, ids: Iterable<string>): void {
   const universe = getUniverse(seed);
   for (const id of ids) universe.remember(id);
 }
+
+const userDataIds = (d: UserData): string[] => [...Object.keys(d.ratings), ...d.bookmarks, ...d.visited.map((v) => v.id)];
 
 export const useStore = create<AppState>()(
   persist(
@@ -287,7 +321,9 @@ export const useStore = create<AppState>()(
       level: 'galaxy',
       focus: { kind: 'galaxy', centerLy: GALACTIC_CENTRE },
       cameraDistanceKm: 0,
+      cameraLy: GALACTIC_CENTRE,
       flightProgress: null,
+      flightTarget: null,
       navRequest: null,
 
       selection: null,
@@ -296,11 +332,13 @@ export const useStore = create<AppState>()(
       simDays: simDaysNow(),
       timeScale: DEFAULT_TIME_SCALE,
       paused: false,
+      timeRequest: null,
 
       settings: defaultSettings(),
       ratings: {},
       bookmarks: [],
       visited: [],
+      userDataBySeed: {},
 
       ui: defaultUI(),
       toasts: [],
@@ -308,11 +346,21 @@ export const useStore = create<AppState>()(
       requestFocus: (target, mode = 'fly') => set({ navRequest: nextNav(target, mode) }),
 
       goUp: () => {
-        const { navRequest, focus, settings } = get();
-        // Go up from where we are *heading*, so repeated Esc presses climb several levels.
-        const current = navRequest?.target ?? focus;
+        const { navRequest, flightTarget, focus, settings } = get();
+        // Climb from where we are *heading*, so repeated Esc presses go up several levels.
+        const current = navRequest?.target ?? flightTarget ?? focus;
         const target = parentFocus(current, getUniverse(settings.galaxySeed));
         if (target) set({ navRequest: nextNav(target, 'fly'), selection: selectionFor(target) });
+      },
+
+      requestTime: (simDays) => {
+        if (!Number.isFinite(simDays)) return;
+        timeSeq += 1;
+        set({ timeRequest: { simDays, seq: timeSeq } });
+      },
+
+      consumeTimeRequest: (seq) => {
+        if (get().timeRequest?.seq === seq) set({ timeRequest: null });
       },
 
       select: (sel) => {
@@ -360,7 +408,8 @@ export const useStore = create<AppState>()(
       },
 
       updateSettings: (patch) => {
-        const prev = get().settings;
+        const s = get();
+        const prev = s.settings;
         const next = sanitizeSettings(patch, prev);
         const changed = (Object.keys(next) as (keyof Settings)[]).some((k) => next[k] !== prev[k]);
         if (!changed) return;
@@ -368,13 +417,24 @@ export const useStore = create<AppState>()(
           set({ settings: next });
           return;
         }
-        // A new galaxy: every id in flight belongs to the old one.
+        // A new galaxy: stash this seed's user data, restore the new seed's, and drop every id in
+        // flight (they belong to the old universe).
+        const prevKey = String(prev.galaxySeed);
+        const nextKey = String(next.galaxySeed);
+        const current: UserData = { ratings: s.ratings, bookmarks: s.bookmarks, visited: s.visited };
+        const kept = Object.entries(s.userDataBySeed).filter(([k]) => k !== prevKey && k !== nextKey);
+        if (!isEmptyUserData(current)) kept.push([prevKey, current]);
+        const stash = Object.fromEntries(kept.slice(-MAX_STASHED_SEEDS)); // oldest stashes go first
+        const restored = s.userDataBySeed[nextKey] ?? { ratings: {}, bookmarks: [], visited: [] };
         set({
           settings: next,
+          ...restored,
+          userDataBySeed: stash,
           selection: null,
           hover: null,
           navRequest: nextNav({ kind: 'galaxy', centerLy: GALACTIC_CENTRE }, 'jump'),
         });
+        rememberIds(next.galaxySeed, userDataIds(restored));
       },
 
       setPanel: (key, open) => {
@@ -411,13 +471,19 @@ export const useStore = create<AppState>()(
 
       setFromEngine: (patch) => {
         const s = get();
-        const keys = Object.keys(patch) as (keyof EnginePatch)[];
-        const changed = keys.some((k) => {
-          if (k === 'focus') return patch.focus !== undefined && !sameFocus(patch.focus, s.focus);
-          if (k === 'boot') {
-            return patch.boot !== undefined && (patch.boot.progress !== s.boot.progress || patch.boot.message !== s.boot.message);
+        const changed = (Object.keys(patch) as (keyof EnginePatch)[]).some((k) => {
+          switch (k) {
+            case 'focus':
+              return patch.focus !== undefined && !sameFocus(patch.focus, s.focus);
+            case 'flightTarget':
+              return patch.flightTarget !== undefined && !sameFocus(patch.flightTarget, s.flightTarget);
+            case 'cameraLy':
+              return patch.cameraLy !== undefined && !sameTuple(patch.cameraLy, s.cameraLy);
+            case 'boot':
+              return patch.boot !== undefined && (patch.boot.progress !== s.boot.progress || patch.boot.message !== s.boot.message);
+            default:
+              return !Object.is(patch[k], s[k]);
           }
-          return !Object.is(patch[k], s[k]);
         });
         if (changed) set(patch);
       },
@@ -428,17 +494,17 @@ export const useStore = create<AppState>()(
     }),
     {
       name: STORAGE_KEY,
-      version: STORAGE_VERSION,
+      version: GEN_VERSION,
       storage: createSafeStorage(),
       partialize: (s): PersistedSlice => ({
         settings: s.settings,
         ratings: s.ratings,
         bookmarks: s.bookmarks,
         visited: s.visited,
+        userDataBySeed: s.userDataBySeed,
         onboardingSeen: s.ui.onboardingSeen,
       }),
-      // Older/newer versions: salvage whatever still validates.
-      migrate: (persisted) => sanitizePersisted(persisted),
+      migrate: migratePersisted,
       merge: (persisted, current) => {
         const p = sanitizePersisted(persisted);
         return {
@@ -447,12 +513,13 @@ export const useStore = create<AppState>()(
           ratings: p.ratings,
           bookmarks: p.bookmarks,
           visited: p.visited,
+          userDataBySeed: p.userDataBySeed,
           ui: { ...current.ui, onboardingSeen: p.onboardingSeen },
         };
       },
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        const ids = [...Object.keys(state.ratings), ...state.bookmarks, ...state.visited.map((v) => v.id)];
+        const ids = userDataIds(state);
         if (ids.length > 0) rememberIds(state.settings.galaxySeed, ids);
       },
     },

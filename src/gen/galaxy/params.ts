@@ -88,7 +88,8 @@ export function finalizeGalaxyParams(shape: GalaxyShapeParams): GalaxyParams {
   const structure = getGalaxyStructure(shape);
   const homeLy = findHome(structure);
   const scale = GALAXY_HOME_DENSITY / structure.density(homeLy[0], homeLy[1], homeLy[2]);
-  const estimatedStarCount = scale * integrateDensity(structure.density, INTEGRATION_EXTENT * shape.radiusLy);
+  const estimatedStarCount =
+    scale * integrateDensity(structure.density, INTEGRATION_EXTENT * shape.radiusLy);
   return { ...shape, homeLy, estimatedStarCount };
 }
 

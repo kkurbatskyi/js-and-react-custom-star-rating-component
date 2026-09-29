@@ -9,7 +9,16 @@
  * the PlanetVisual's root group, which already carries `positionKm` and `orientation`. Work in
  * body-fixed km (Y = spin axis) and do NOT apply positionKm/orientation to `object` yourself.
  */
-import { Color, GLSL3, Mesh, NormalBlending, ShaderMaterial, SphereGeometry, Uniform, Vector3 } from 'three';
+import {
+  Color,
+  GLSL3,
+  Mesh,
+  NormalBlending,
+  ShaderMaterial,
+  SphereGeometry,
+  Uniform,
+  Vector3,
+} from 'three';
 import type { BodyBase, StarSystem } from '../../../core/types';
 import type { IAtmosphereShell, PlanetUniforms, Quality, VisualFrame } from '../../contracts';
 import { common } from '../../shaders/common.glsl';
@@ -82,7 +91,10 @@ class AtmosphereShell implements IAtmosphereShell {
     const atm = body.atmosphere as NonNullable<BodyBase['atmosphere']>;
     const [r, g, b] = atmosphereTint(body);
     this.uniforms.uColor.value.setRGB(r, g, b);
-    this.uniforms.uStrength.value = Math.min(1.4, 0.55 + 0.3 * Math.log10(1 + atm.surfacePressureAtm * 9));
+    this.uniforms.uStrength.value = Math.min(
+      1.4,
+      0.55 + 0.3 * Math.log10(1 + atm.surfacePressureAtm * 9),
+    );
     // ~6 scale heights, clamped so the rim stays visible but never balloons.
     const thickness = Math.min(0.05, Math.max(0.015, (6 * atm.scaleHeightKm) / body.radiusKm));
     const segments = SEGMENTS[quality];
@@ -119,7 +131,11 @@ class AtmosphereShell implements IAtmosphereShell {
 }
 
 /** A limb-glow shell for bodies with a meaningful atmosphere, else null. */
-export function createAtmosphere(body: BodyBase, _system: StarSystem, quality: Quality): IAtmosphereShell | null {
+export function createAtmosphere(
+  body: BodyBase,
+  _system: StarSystem,
+  quality: Quality,
+): IAtmosphereShell | null {
   if (!body.atmosphere || body.atmosphere.surfacePressureAtm < MIN_PRESSURE_ATM) return null;
   return new AtmosphereShell(body, quality);
 }

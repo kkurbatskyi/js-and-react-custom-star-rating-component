@@ -35,7 +35,13 @@ import type {
   StarSystem,
   Vec3Tuple,
 } from '../core/types';
-import { G_SI, SECONDS_PER_DAY, SOLAR_MASS_KG, SOLAR_RADIUS_KM, SPEED_OF_LIGHT_KMS } from '../core/units';
+import {
+  G_SI,
+  SECONDS_PER_DAY,
+  SOLAR_MASS_KG,
+  SOLAR_RADIUS_KM,
+  SPEED_OF_LIGHT_KMS,
+} from '../core/units';
 import { CATALOG_LEVELS, cellSizeLy, levelForAbsMag, STAR_KINDS } from './contracts';
 import { formatBlockKey, formatStarId } from './ids';
 import { assembleSystem, buildProceduralSystem, createSystemContext } from './mockBodies';
@@ -146,11 +152,23 @@ function physicsFor(cls: MockClass, rng: Rng): StarPhysics {
     }
     case 'KIII': {
       const R = rng.range(9, 22);
-      return normalStar('giant', rng.range(1.1, 2), R, luminosityFromRadiusTemp(R, rng.range(4100, 4700)), 'III');
+      return normalStar(
+        'giant',
+        rng.range(1.1, 2),
+        R,
+        luminosityFromRadiusTemp(R, rng.range(4100, 4700)),
+        'III',
+      );
     }
     case 'MIII': {
       const R = rng.range(40, 90);
-      return normalStar('giant', rng.range(1, 1.6), R, luminosityFromRadiusTemp(R, rng.range(3300, 3700)), 'III');
+      return normalStar(
+        'giant',
+        rng.range(1, 1.6),
+        R,
+        luminosityFromRadiusTemp(R, rng.range(3300, 3700)),
+        'III',
+      );
     }
     case 'WD': {
       const mass = rng.range(0.5, 0.75);
@@ -251,16 +269,27 @@ export function createMockCatalog(galaxy: GalaxyModel): MockCatalog {
     let r = 0;
     while (r < MIN_HOME_DISTANCE_LY) r = MOCK_RADIUS_LY * Math.cbrt(rng.next()); // uniform in the ball
     sampleUnitVector(rng, dir);
-    drafts.push({ pos: [home[0] + dir[0] * r, home[1] + dir[1] * r, home[2] + dir[2] * r], phys, cls });
+    drafts.push({
+      pos: [home[0] + dir[0] * r, home[1] + dir[1] * r, home[2] + dir[2] * r],
+      phys,
+      cls,
+    });
   }
 
-  const takenNames = new Set<string>([HOME_STAR_NAME.toLowerCase(), CORE_BLACK_HOLE_NAME.toLowerCase()]);
+  const takenNames = new Set<string>([
+    HOME_STAR_NAME.toLowerCase(),
+    CORE_BLACK_HOLE_NAME.toLowerCase(),
+  ]);
   const records: StarRecord[] = [];
   const cellCounts = new Map<string, number>();
   for (const d of drafts) {
     const level = levelForAbsMag(d.phys.absMag);
     const size = cellSizeLy(level);
-    const cell: Vec3Tuple = [Math.floor(d.pos[0] / size), Math.floor(d.pos[1] / size), Math.floor(d.pos[2] / size)];
+    const cell: Vec3Tuple = [
+      Math.floor(d.pos[0] / size),
+      Math.floor(d.pos[1] / size),
+      Math.floor(d.pos[2] / size),
+    ];
     const key = formatBlockKey(level, cell[0], cell[1], cell[2]);
     const index = cellCounts.get(key) ?? 0;
     cellCounts.set(key, index + 1);
@@ -290,7 +319,8 @@ export function createMockCatalog(galaxy: GalaxyModel): MockCatalog {
   }
   const coreId = records[0].id;
   const homeId = records[1].id;
-  if (coreId !== CORE_BLACK_HOLE_ID) throw new Error(`mock catalogue: core black hole got ${coreId}`);
+  if (coreId !== CORE_BLACK_HOLE_ID)
+    throw new Error(`mock catalogue: core black hole got ${coreId}`);
 
   const byId = new Map(records.map((r) => [r.id, r]));
   const blocks = buildBlocks(records);
@@ -344,7 +374,11 @@ function buildBlocks(records: readonly StarRecord[]): Map<string, StarBlock> {
   for (const [key, list] of groups) {
     const { level, cell } = list[0];
     const size = cellSizeLy(level);
-    const originLy: Vec3Tuple = [(cell[0] + 0.5) * size, (cell[1] + 0.5) * size, (cell[2] + 0.5) * size];
+    const originLy: Vec3Tuple = [
+      (cell[0] + 0.5) * size,
+      (cell[1] + 0.5) * size,
+      (cell[2] + 0.5) * size,
+    ];
     const n = list.length;
     const block: StarBlock = {
       key,
@@ -414,11 +448,21 @@ function starDetails(rec: StarRecord): StarDetails {
       };
     }
     case 'white-dwarf':
-      return { ...base, ageGyr: rng.range(1, 10), rotationPeriodDays: logRange(rng, 0.02, 2), activity: 0 };
+      return {
+        ...base,
+        ageGyr: rng.range(1, 10),
+        rotationPeriodDays: logRange(rng, 0.02, 2),
+        activity: 0,
+      };
     case 'giant':
     case 'supergiant':
     case 'subgiant':
-      return { ...base, ageGyr: rng.range(1.5, 9), rotationPeriodDays: rng.range(100, 700), activity: rng.range(0.02, 0.1) };
+      return {
+        ...base,
+        ageGyr: rng.range(1.5, 9),
+        rotationPeriodDays: rng.range(100, 700),
+        activity: rng.range(0.02, 0.1),
+      };
     case 'main-sequence': {
       const [a0, a1, r0, r1] = MS_AGE_ROTATION[rec.spectralClass] ?? [0.1, 1, 1, 5];
       const ageGyr = rng.range(a0, a1);

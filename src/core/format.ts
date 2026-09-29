@@ -116,7 +116,8 @@ export function formatCount(n: number): string {
     [1e6, 'million'],
   ];
   for (const [scale, word] of scales) {
-    if (a >= scale * 0.9995) return `${formatNumber(n / scale, { sig: a / scale >= 100 ? 3 : 2 })}${NBSP}${word}`;
+    if (a >= scale * 0.9995)
+      return `${formatNumber(n / scale, { sig: a / scale >= 100 ? 3 : 2 })}${NBSP}${word}`;
   }
   return formatNumber(Math.round(n));
 }
@@ -125,7 +126,8 @@ export function formatCount(n: number): string {
 export function formatPercent(fraction: number, opts: { decimals?: number } = {}): string {
   if (!Number.isFinite(fraction)) return DASH;
   const p = fraction * 100;
-  if (opts.decimals !== undefined) return `${formatNumber(p, { decimals: opts.decimals, keepZeros: true })}%`;
+  if (opts.decimals !== undefined)
+    return `${formatNumber(p, { decimals: opts.decimals, keepZeros: true })}%`;
   const a = Math.abs(p);
   if (a === 0) return '0%';
   if (a >= 10) return `${formatNumber(Math.round(p))}%`;
@@ -220,7 +222,8 @@ export function formatRadiusSolar(radiusSolar: number): string {
   const km = radiusSolar * SOLAR_RADIUS_KM;
   if (Math.abs(km) < 1000) return formatDistanceKm(km);
   const base = `${formatNumber(radiusSolar, { sig: 3 })}${NBSP}R☉`;
-  if (Math.abs(radiusSolar) < 0.05) return `${base} (${formatNumber(km / EARTH_RADIUS_KM, { sig: 3 })}${NBSP}R⊕)`;
+  if (Math.abs(radiusSolar) < 0.05)
+    return `${base} (${formatNumber(km / EARTH_RADIUS_KM, { sig: 3 })}${NBSP}R⊕)`;
   return base;
 }
 
@@ -231,7 +234,13 @@ export interface MassFormatOptions {
   long?: boolean;
 }
 
-function massUnit(value: string, symbol: string, singular: string, plural: string, long?: boolean): string {
+function massUnit(
+  value: string,
+  symbol: string,
+  singular: string,
+  plural: string,
+  long?: boolean,
+): string {
   if (!long) return `${value}${NBSP}${symbol}`;
   return `${value} ${value === '1' ? singular : plural}`;
 }
@@ -248,13 +257,25 @@ export function formatMassEarth(massEarth: number, opts: MassFormatOptions = {})
     return massUnit(v, 'M♃', 'Jupiter mass', 'Jupiter masses', opts.long);
   }
   if (a > 0 && a < 1e-3) return `${formatScientific(massEarth * EARTH_MASS_KG, 3)}${NBSP}kg`;
-  return massUnit(formatNumber(massEarth, { sig: 3 }), 'M⊕', 'Earth mass', 'Earth masses', opts.long);
+  return massUnit(
+    formatNumber(massEarth, { sig: 3 }),
+    'M⊕',
+    'Earth mass',
+    'Earth masses',
+    opts.long,
+  );
 }
 
 /** Stellar mass: "1 M☉", "0.0891 M☉", "15.2 M☉". */
 export function formatMassSolar(massSolar: number, opts: MassFormatOptions = {}): string {
   if (!Number.isFinite(massSolar)) return DASH;
-  return massUnit(formatNumber(massSolar, { sig: 3 }), 'M☉', 'solar mass', 'solar masses', opts.long);
+  return massUnit(
+    formatNumber(massSolar, { sig: 3 }),
+    'M☉',
+    'solar mass',
+    'solar masses',
+    opts.long,
+  );
 }
 
 // ───────────────────────────────────────────── Physical quantities
@@ -320,7 +341,9 @@ export function formatAngle(rad: number, opts: { decimals?: number } = {}): stri
   if (!Number.isFinite(rad)) return DASH;
   const deg = (rad * 180) / Math.PI;
   const text =
-    opts.decimals !== undefined ? formatNumber(deg, { decimals: opts.decimals }) : formatNumber(deg, { sig: 3 });
+    opts.decimals !== undefined
+      ? formatNumber(deg, { decimals: opts.decimals })
+      : formatNumber(deg, { sig: 3 });
   return `${text}°`;
 }
 
@@ -347,7 +370,8 @@ export function formatPeriodDays(days: number): string {
   if (d === 0) body = `0${NBSP}s`;
   else if (sec < 1) body = `${formatNumber(sec * 1000, { sig: 3 })}${NBSP}ms`;
   else if (sec < SECONDS_PER_MINUTE) body = `${formatNumber(sec, { sig: 3 })}${NBSP}s`;
-  else if (sec < SECONDS_PER_HOUR) body = `${formatNumber(sec / SECONDS_PER_MINUTE, { sig: 3 })}${NBSP}min`;
+  else if (sec < SECONDS_PER_HOUR)
+    body = `${formatNumber(sec / SECONDS_PER_MINUTE, { sig: 3 })}${NBSP}min`;
   else if (d < 2) body = `${formatNumber(d * 24, { sig: 3 })}${NBSP}h`;
   else if (d < 100) body = `${formatNumber(d, { sig: 3 })}${NBSP}days`;
   else if (d < 1000) body = `${formatNumber(Math.round(d))}${NBSP}days`;
@@ -373,13 +397,16 @@ export function formatSimDate(simDays: number): string {
   const z = days + 719_468;
   const era = Math.floor(z / 146_097);
   const doe = z - era * 146_097;
-  const yoe = Math.floor((doe - Math.floor(doe / 1460) + Math.floor(doe / 36_524) - Math.floor(doe / 146_096)) / 365);
+  const yoe = Math.floor(
+    (doe - Math.floor(doe / 1460) + Math.floor(doe / 36_524) - Math.floor(doe / 146_096)) / 365,
+  );
   const doy = doe - (365 * yoe + Math.floor(yoe / 4) - Math.floor(yoe / 100));
   const mp = Math.floor((5 * doy + 2) / 153);
   const day = doy - Math.floor((153 * mp + 2) / 5) + 1;
   const month = mp < 10 ? mp + 3 : mp - 9;
   const year = yoe + era * 400 + (month <= 2 ? 1 : 0);
-  const yearText = year < 0 ? `${MINUS}${String(-year).padStart(4, '0')}` : String(year).padStart(4, '0');
+  const yearText =
+    year < 0 ? `${MINUS}${String(-year).padStart(4, '0')}` : String(year).padStart(4, '0');
   const hh = Math.floor(minuteOfDay / 60);
   const mm = minuteOfDay - hh * 60;
   return `${yearText}-${pad2(month)}-${pad2(day)} ${pad2(hh)}:${pad2(mm)} UTC`;
