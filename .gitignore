@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+dist-artifact/
+*.tsbuildinfo
+
+# test output
+test-results/
+playwright-report/
+blob-report/
+coverage/
+
+# vite dependency caches (one per dev server: VITE_CACHE_DIR=node_modules/.vite-<name>)
+.vite/
+.vite-*/
+
+# logs & OS noise
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# editors
+.idea/
+*.swp
