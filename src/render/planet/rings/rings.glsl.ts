@@ -21,6 +21,7 @@
  * centre perpendicular to the view direction, -1 the part in front (RENDER_ORDER.ringsFar / ringsNear).
  */
 import { common } from '../../shaders/common.glsl';
+import { skyEclipseGlsl } from '../atmosphere/eclipse.glsl';
 import { ringProfileGlsl } from './ringProfile.glsl';
 
 export const ringVertex = /* glsl */ `
@@ -34,6 +35,7 @@ void main() {
 export const ringFragment = /* glsl */ `
 ${common}
 ${ringProfileGlsl}
+${skyEclipseGlsl}
 
 uniform vec4 uRing;        // inner, outer, peak tau, seed phase
 uniform float uHalf;       // +1: far half, -1: near half
@@ -47,6 +49,8 @@ uniform vec3 uColor;       // particle albedo colour
 uniform vec4 uPhase;       // forward g, backward g, backward weight, opposition surge
 uniform float uMs;         // multiple-scattering gain
 uniform float uIntensity;
+uniform vec4 uOcc[4];      // eclipse casters (moons): body frame centre, radius
+uniform int uOccCount;
 
 in vec3 vP;
 out vec4 fragColor;
@@ -61,19 +65,6 @@ vec3 ringRamp(float t) {
   return mix(c, vec3(0.92, 0.9, 0.86), smoothstep(0.55, 0.95, t));
 }
 
-/** Fraction of the star's disc (angular radius rs) covered by a disc of angular radius ro at separation d. */
-float ringDiscOverlap(float rs, float ro, float d) {
-  if (d >= rs + ro) return 0.0;
-  if (d <= abs(rs - ro)) return ro >= rs ? 1.0 : (ro * ro) / (rs * rs);
-  float rs2 = rs * rs;
-  float ro2 = ro * ro;
-  float a = (d * d + rs2 - ro2) / (2.0 * d * rs);
-  float b = (d * d + ro2 - rs2) / (2.0 * d * ro);
-  float k = (-d + rs + ro) * (d + rs - ro) * (d - rs + ro) * (d + rs + ro);
-  float area = rs2 * acos(clamp(a, -1.0, 1.0)) + ro2 * acos(clamp(b, -1.0, 1.0)) - 0.5 * sqrt(max(k, 0.0));
-  return area / (PI * rs2);
-}
-
 /** Sunlight reaching the ring point P past the planet (umbra, penumbra, antumbra). */
 float planetVisibility(vec3 P) {
   vec3 c = -P;
@@ -82,7 +73,7 @@ float planetVisibility(vec3 P) {
   if (along <= 0.0 || dist <= uPlanetR) return 1.0;
   float rho = asin(min(uPlanetR / dist, 1.0));
   float sep = acos(clamp(along / dist, -1.0, 1.0));
-  return 1.0 - ringDiscOverlap(uSunAng, rho, sep);
+  return 1.0 - skyDiscOverlap(uSunAng, rho, sep);
 }
 
 void main() {
@@ -114,7 +105,7 @@ void main() {
   if (sameSide) slab = mu0 / (mu0 + mu) * (1.0 - e0 * e1);
   else slab = abs(dm) > 2e-3 ? mu0 * (e0 - e1) / dm : (tau / mu0) * e0;
   float multi = 1.0 + uMs * (1.0 - exp(-tau)) * dot(albedo, vec3(0.3333));
-  vec3 radiance = albedo * (0.25 * phase * slab * multi) * uSunRad * planetVisibility(vP);
+  vec3 radiance = albedo * (0.25 * phase * slab * multi) * uSunRad * (planetVisibility(vP) * skyEclipseAll(vP, uSunL, uOcc, uOccCount, uSunAng));
 
   float alpha = 1.0 - e1;
   fragColor = vec4(radiance, alpha) * uIntensity;   // premultiplied

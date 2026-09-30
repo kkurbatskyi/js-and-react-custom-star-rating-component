@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { atmosphereFragment, atmosphereVertex } from './atmosphere/atmosphere.glsl';
+import { skyEclipseGlsl } from './atmosphere/eclipse.glsl';
 import { cloudFieldGlsl } from './clouds/cloudField.glsl';
+import { cloudShadowGlsl } from './clouds/cloudShadow.glsl';
 import { cloudFragment, cloudVertex } from './clouds/clouds.glsl';
 import { ringProfileGlsl, ringShadowGlsl } from './rings/ringProfile.glsl';
 import { ringFragment, ringVertex } from './rings/rings.glsl';
@@ -8,7 +10,9 @@ import { ringFragment, ringVertex } from './rings/rings.glsl';
 const SOURCES: Record<string, string> = {
   atmosphereVertex,
   atmosphereFragment,
+  skyEclipseGlsl,
   cloudFieldGlsl,
+  cloudShadowGlsl,
   cloudVertex,
   cloudFragment,
   ringProfileGlsl,

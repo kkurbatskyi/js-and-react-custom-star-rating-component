@@ -53,12 +53,15 @@ export class CloudLayer implements ICloudLayer {
   private readonly camQ = new Vector3();
   private readonly sunQ = new Vector3();
   private readonly oblate: number;
+  private readonly radiusKm: number;
   private epoch: number | null = null;
+  private readonly shadow: Uniform<Vector4>;
   private readonly u;
 
   constructor(body: BodyBase, params: CloudParams, quality: Quality) {
     this.params = params;
     this.oblate = 1 - body.oblateness;
+    this.radiusKm = body.radiusKm;
     const rc = body.radiusKm * (1 + params.heightFraction);
     const meshR = rc * MESH_MARGIN;
     const oct = OCTAVES[quality];
@@ -81,6 +84,9 @@ export class CloudLayer implements ICloudLayer {
       uColor: new Uniform(new Color(...params.color)),
       uSunTau: new Uniform(new Vector3(...params.sunTau)),
       uSky: new Uniform(new Color(...params.skyColor)),
+      uSunAng: new Uniform(0.0047),
+      uOcc: new Uniform(this.frame.occluders),
+      uOccCount: new Uniform(0),
       uLook: new Uniform(new Vector4(params.opacity, 1, oct.shadow, 0.012)),
       uCloudA: new Uniform(new Vector4(params.coverage, params.zonalMean, wisp, overcast)),
       uCloudB: new Uniform(new Vector4(0, 0, wisp ? 0.3 : 0.28, 0)),
@@ -91,6 +97,7 @@ export class CloudLayer implements ICloudLayer {
       uCloudVortexA: new Uniform(vortexA),
       uCloudVortexB: new Uniform(vortexB),
     };
+    this.shadow = new Uniform(new Vector4(rc, 0.75, params.opacity, 0));
     this.object = new Mesh(
       new SphereGeometry(1, SEGMENTS[quality], SEGMENTS[quality] / 2),
       new ShaderMaterial({
@@ -120,11 +127,31 @@ export class CloudLayer implements ICloudLayer {
     this.u.uLook.value.z = oct.shadow;
   }
 
+  /**
+   * The uniforms `cloudShadowGlsl` reads, as live objects the layer keeps updating: merge them into the
+   * surface material's uniforms to receive cloud shadows.
+   */
+  shadowUniforms(): Record<string, Uniform> {
+    return {
+      uCloudA: this.u.uCloudA,
+      uCloudB: this.u.uCloudB,
+      uCloudSeed: this.u.uCloudSeed,
+      uCloudOctBase: this.u.uCloudOctBase,
+      uCloudOctDetail: this.u.uCloudOctDetail,
+      uCloudVortexCount: this.u.uCloudVortexCount,
+      uCloudVortexA: this.u.uCloudVortexA,
+      uCloudVortexB: this.u.uCloudVortexB,
+      uCloudShadow: this.shadow,
+    };
+  }
+
   update(frame: VisualFrame, u: PlanetUniforms): void {
     this.object.visible = u.intensity > 0.001;
     if (!this.object.visible) return;
     const f = this.frame;
-    f.update(u);
+    f.update(u, this.radiusKm);
+    this.u.uOccCount.value = f.occluderCount;
+    this.u.uSunAng.value = Math.max(u.sunAngularRadiusRad, 1e-5);
     toSphereSpace(f.camPos, this.oblate, this.camQ);
     toSphereSpace(f.sunDir, this.oblate, this.sunQ).normalize();
     this.u.uSunRad.value.setRGB(

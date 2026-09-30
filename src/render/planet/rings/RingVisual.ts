@@ -52,11 +52,13 @@ export class RingVisual implements IRingVisual {
   private readonly frame = new SkyFrame();
   private readonly sunQ = new Vector3();
   private readonly oblate: number;
+  private readonly outerKm: number;
   private readonly u;
 
   constructor(body: BodyBase, rings: RingSystem, quality: Quality) {
     this.object.name = 'rings';
     this.oblate = 1 - body.oblateness;
+    this.outerKm = rings.outerRadiusKm;
     this.material = deriveRingMaterial(rings);
     const m = this.material;
     this.geometry = createRingGeometry(rings.innerRadiusKm, rings.outerRadiusKm, SEGMENTS[quality]);
@@ -72,6 +74,8 @@ export class RingVisual implements IRingVisual {
       uPhase: new Uniform(new Vector4(m.phaseForward, m.phaseBackward, m.backwardWeight, m.surge)),
       uMs: new Uniform(m.multiScatter),
       uIntensity: new Uniform(1),
+      uOcc: new Uniform(this.frame.occluders),
+      uOccCount: new Uniform(0),
     };
     for (const [half, order] of [
       [1, RENDER_ORDER.ringsFar],
@@ -101,7 +105,8 @@ export class RingVisual implements IRingVisual {
   update(_frame: VisualFrame, u: PlanetUniforms): void {
     this.object.visible = u.intensity > 0.001;
     if (!this.object.visible) return;
-    this.frame.update(u);
+    this.frame.update(u, this.outerKm);
+    this.u.uOccCount.value = this.frame.occluderCount;
     toSphereSpace(this.frame.sunDir, this.oblate, this.sunQ).normalize();
     this.u.uSunRad.value.setRGB(
       u.sunColor.r * u.sunIntensity,

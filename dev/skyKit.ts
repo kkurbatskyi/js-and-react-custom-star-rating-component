@@ -9,6 +9,7 @@
  *   ?sun=<az>,<el>   sun direction override, degrees (az from +Z towards +X, el above the XZ plane)
  *   ?orbit=<dist>,<az>,<el>  camera override, planet radii and degrees   ?fov=<deg>
  *   ?star=1          draw the star's disc (default: only when the sun is near the view)
+ *   ?moon=1          park a moon between the sun and the planet's limb (eclipse shadows on clouds / rings)
  *   ?tilt=1          use the body's real orientation (default: identity: ring plane = world XZ)
  *   ?parts=atm,cloud,ring   restrict to some sky parts
  */
@@ -22,9 +23,10 @@ import type {
   PlanetUniforms,
 } from '../src/render/contracts';
 import { createAtmosphere } from '../src/render/planet/atmosphere';
-import { createClouds } from '../src/render/planet/clouds';
+import { CloudLayer, cloudShadowGlsl, createClouds } from '../src/render/planet/clouds';
 import { PlanetVisual } from '../src/render/planet/PlanetVisual';
 import { createRings, ringUniformVector } from '../src/render/planet/rings';
+import { common } from '../src/render/shaders/common.glsl';
 import { noise } from '../src/render/shaders/noise.glsl';
 import { bodyOrientation } from '../src/sim/orientation';
 import { createHarness, type Harness } from './harness';
@@ -81,6 +83,7 @@ void main() {
 `;
 
 const surfaceFragment = /* glsl */ `
+${common}
 ${noise}
 uniform vec3 uRadii;
 uniform vec3 uSunDir;      // body frame
@@ -115,7 +118,7 @@ void main() {
   float mu = dot(n, uSunDir);
   float lit = smoothstep(-0.03, 0.1, mu) * max(mu, 0.0);
   // Ring shadow on the planet (same optical-depth profile the rings use) when RING_SHADOW is available.
-  fragColor = vec4(albedo * uSunRad * (lit * RING_SHADOW + 0.004), 1.0);
+  fragColor = vec4(albedo * uSunRad * (lit * RING_SHADOW * CLOUD_SHADOW + 0.004), 1.0);
 }
 `;
 
@@ -127,7 +130,7 @@ class TestSurface {
   private readonly sunRad = new THREE.Vector3(1, 1, 1);
   private readonly qInv = new THREE.Quaternion();
 
-  constructor(body: BodyBase, ringShadowGlsl: string) {
+  constructor(body: BodyBase, ringShadowGlsl: string, clouds: CloudLayer | null) {
     const giant = body.type === 'gas-giant' || body.type === 'ice-giant';
     const cols = body.appearance.surfaceColors;
     const c = (i: number): THREE.Color => {
@@ -159,6 +162,9 @@ class TestSurface {
       'RING_SHADOW',
       ring ? 'ringShadowTest(vLocal, uSunDir)' : '1.0',
     );
+    const shadowUniforms = clouds ? clouds.shadowUniforms() : {};
+    Object.assign(this.uniforms, shadowUniforms);
+    const cloudHelper = clouds ? cloudShadowGlsl : '';
     const helper = ring
       ? `${ringShadowGlsl}
 float ringShadowTest(vec3 P, vec3 L) { return ringShadow(P, L, uRing); }`
@@ -168,7 +174,9 @@ float ringShadowTest(vec3 P, vec3 L) { return ringShadow(P, L, uRing); }`
       new THREE.ShaderMaterial({
         glslVersion: THREE.GLSL3,
         vertexShader: surfaceVertex,
-        fragmentShader: fragment.replace('void main() {', `${helper}\nvoid main() {`),
+        fragmentShader: fragment
+          .replaceAll('CLOUD_SHADOW', clouds ? 'cloudShadow(vLocal, uSunDir)' : '1.0')
+          .replace('void main() {', `${cloudHelper}\n${helper}\nvoid main() {`),
         uniforms: this.uniforms,
         toneMapped: false,
       }),
@@ -275,10 +283,14 @@ export async function createSkyRig(config: {
     h.scene.add(planet.object);
     void h.prepare(planet, 250);
   } else {
-    surface = new TestSurface(body, config.ringShadowGlsl);
+    if (parts.has('cloud')) clouds = createClouds(body, system, h.quality);
+    surface = new TestSurface(
+      body,
+      config.ringShadowGlsl,
+      clouds instanceof CloudLayer ? clouds : null,
+    );
     root.add(surface.mesh);
     if (parts.has('atm')) atmosphere = createAtmosphere(body, system, h.quality);
-    if (parts.has('cloud')) clouds = createClouds(body, system, h.quality);
     if (parts.has('ring')) rings = createRings(body, system, h.quality);
     for (const p of [clouds, atmosphere, rings]) if (p) root.add(p.object);
   }
@@ -324,6 +336,8 @@ export async function createSkyRig(config: {
     sunIntensity: 1,
     intensity: 1,
   };
+  const moonPos = new THREE.Vector3();
+  if (params.get('moon') === '1') u.occluders = [{ positionKm: moonPos, radiusKm: R * 0.27 }];
   const starDist = R * 300;
   starMesh.scale.setScalar(starDist * Math.tan(sunAng));
 
@@ -336,6 +350,14 @@ export async function createSkyRig(config: {
     u.intensity = ctl.intensity;
     root.position.copy(rel);
     root.quaternion.copy(q);
+    if (u.occluders) {
+      // Absolute (planet at the origin), camera-relative below: between the sun and the planet, off-axis.
+      moonPos
+        .copy(sunDir)
+        .multiplyScalar(R * 3.2)
+        .add(new THREE.Vector3(R * 0.3, R * -0.15, 0));
+      h.relative(moonPos, moonPos);
+    }
     if (planet) planet.update(f, u);
     else {
       surface?.update(u);

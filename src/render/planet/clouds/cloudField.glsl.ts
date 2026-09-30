@@ -114,7 +114,7 @@ float cloudMask(vec3 n, float fp, float detail, out vec3 grad) {
     detailFreq = 21.0;
   }
   float base = cloudFbm(p1, uCloudOctBase, fp, 2.5);
-  if (uCloudA.w > 0.5) base += 0.22 * sin(pn.y * 9.0 + 2.2 * base); // overcast: subtle banding
+  if (uCloudA.w > 0.5) base += 0.34 * sin(pn.y * 9.0 + 2.6 * base); // overcast: zonal banding
   float m = base - threshold;
   if (detail > 0.5) {
     vec4 dg = cloudFbmGrad(p2, uCloudOctDetail, fp, detailFreq);

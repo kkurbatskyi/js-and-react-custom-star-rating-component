@@ -98,7 +98,142 @@ vec3 sunOpticalDepth(float r, float mu) {
 float sunVisibility(float r, float mu) {
   if (mu >= 0.0) return 1.0;
   float tangentAlt = r * sqrt(max(1.0 - mu * mu, 0.0)) - uGeom.x;
-  float w = uSunAng * r * -mu;
+  float w = max(uSunAng * r * -mu, 1e-3);           // smoothstep needs edge0 < edge1
+  return smoothstep(-w, w, tangentAlt);
+}
+
+vec3 march(vec3 p0, vec3 d, float t0, float t1, bool scatter, out vec3 tView) {
+  tView = vec3(1.0);
+  vec3 inscatter = vec3(0.0);
+  float rp = uGeom.x;
+  // Line geometry: r(t) = sqrt(b2 + (t - tc)^2), so the position at radius r is t = tc -/+ sqrt(r^2 - b2).
+  float tc = -dot(p0, d);                       // closest approach to the planet centre
+  float b2 = max(dot(p0, p0) - tc * tc, 0.0);
+  float ts = clamp(tc, t0, t1);                 // lowest point of the segment
+  float la = ts - t0;
+  float lb = t1 - ts;
+  float rTs = sqrt(b2 + (ts - tc) * (ts - tc));
+  float rA = sqrt(b2 + (t0 - tc) * (t0 - tc));  // radius at the far end of side A (before the lowest point)
+  float rB = sqrt(b2 + (t1 - tc) * (t1 - tc));  // ... of side B (after it)
+  // Each side that exists gets the full sample count: a limb ray crosses the atmosphere twice, but only a
+  // thin ring of pixels does, so the cost is negligible and the discretisation matches the ground rays.
+  int nA = la > 1e-3 ? uSamples : 0;
+  int nB = lb > 1e-3 ? uSamples : 0;
+  float cosT = dot(d, uSun);
+  float pR = mix(phaseRayleigh(cosT), INV_4PI, uPhase.y);
+  float pM = mix(phaseMie(cosT, uPhase.x), INV_4PI, uPhase.z);
+
+  // Bins are equal steps in ALTITUDE (density falls by a constant factor per bin whatever the geometry),
+  // visited in increasing t: side A from its far end towards the lowest point, then side B away from it.
+  for (int i = 0; i < 48; i++) {
+    if (i >= nA + nB) break;
+    bool sideA = i < nA;
+    int k = sideA ? nA - 1 - i : i - nA;        // bin index counted outwards from the lowest point
+    float cnt = float(sideA ? nA : nB);
+    float rEnd = sideA ? rA : rB;
+    float r0 = mix(rTs, rEnd, float(k) / cnt);
+    float r1 = mix(rTs, rEnd, float(k + 1) / cnt);
+    float rm = 0.5 * (r0 + r1);
+    float s0 = sqrt(max(r0 * r0 - b2, 0.0));
+    float s1 = sqrt(max(r1 * r1 - b2, 0.0));
+    float sm = sqrt(max(rm * rm - b2, 0.0));
+    float dt = s1 - s0;
+    vec3 p = p0 + d * (sideA ? tc - sm : tc + sm);
+
+    float r = max(length(p), rp);
+    float h = r - rp;
+    float dR = exp(-h * uProf.x);
+    float dM = exp(-h * uProf.y);
+    float dA = exp(-abs(h - uProf.z) * uProf.w);
+    vec3 ext = uBetaR * dR + uBetaME * dM + uBetaA * dA;
+    vec3 stepT = exp(-ext * dt);
+    if (scatter) {
+      float mu = dot(p, uSun) / r;
+      vec3 sunT = exp(-sunOpticalDepth(r, mu)) * sunVisibility(r, mu);
+      vec3 src = sunT * (uBetaR * (dR * pR) + uBetaMS * (dM * pM));
+      // Energy-conserving integration of src * exp(-ext s) over the step (Hillaire 2020).
+      inscatter += tView * src * oneMinusExp(ext * dt) / max(ext, vec3(1e-8));
+    }
+    tView *= stepT;
+  }
+  return inscatter * uSunE;
+}
+
+void main() {
+  vQ = position * uMeshR;              // sphere space (oblateness undone)
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vView = mv.xyz;
+  gl_Position = projectionMatrix * mv;
+}
+`;
+
+export const atmosphereFragment = /* glsl */ `
+${common}
+
+uniform sampler2D uLut;
+uniform vec4 uLutScale;    // xy: 1 - 1/size, zw: 0.5/size (texel-centre mapping), x: mu axis, y: r axis
+uniform vec4 uGeom;        // x: planet radius, y: top radius, z: sqrt(top^2 - planet^2), w: 1 - oblateness
+uniform vec3 uCamQ;        // camera, sphere space (km)
+uniform vec3 uSun;         // unit vector to the star, sphere space
+uniform vec3 uSunE;        // pi * sun radiance * gain
+uniform float uSunAng;     // angular radius of the star (rad)
+uniform vec3 uBetaR;       // Rayleigh scattering (1/km) at the surface
+uniform vec3 uBetaMS;      // Mie scattering
+uniform vec3 uBetaME;      // Mie extinction
+uniform vec3 uBetaA;       // absorber extinction at its peak
+uniform vec4 uProf;        // 1/Hr, 1/Hm, absorber centre (km), 1/absorber width
+uniform vec4 uPhase;       // mie g, multiple-scattering blend (rayleigh, mie)
+uniform int uSamples;
+uniform float uPass;
+uniform float uIntensity;
+uniform mat4 projectionMatrix;   // three.js sets it per render call (each depth slice has its own near/far)
+
+in vec3 vQ;
+in vec3 vView;
+out vec4 fragColor;
+
+const float INV_4PI = 0.07957747154594767;
+
+float phaseRayleigh(float c) {
+  return 0.05968310365946075 * (1.0 + c * c);                 // 3 / (16 pi)
+}
+
+/** Cornette & Shanks (1992): Henyey-Greenstein corrected to satisfy Rayleigh at g = 0. */
+float phaseMie(float c, float g) {
+  float g2 = g * g;
+  return 0.11936620731892151 * (1.0 - g2) / (2.0 + g2) * (1.0 + c * c)
+       / pow(max(1.0 + g2 - 2.0 * g * c, 1e-4), 1.5);         // 3 / (8 pi)
+}
+
+/** 1 - exp(-x), stable for small x. */
+vec3 oneMinusExp(vec3 x) {
+  vec3 small = x * (1.0 - 0.5 * x * (1.0 - 0.3333333 * x));
+  return mix(1.0 - exp(-x), small, vec3(lessThan(x, vec3(1e-3))));
+}
+
+/** Optical depth from radius r along zenith cosine mu to the top of the atmosphere (table look-up). */
+vec3 sunOpticalDepth(float r, float mu) {
+  float rp = uGeom.x;
+  float rt = uGeom.y;
+  float h = max(r - rp, 0.0);
+  float rho = sqrt(h * (2.0 * rp + h));                       // distance to the horizon
+  float disc = max(rt * rt - r * r * (1.0 - mu * mu), 0.0);
+  float d = -r * mu + sqrt(disc);                             // distance to the top boundary
+  float dMin = max(rt - r, 0.0);
+  float dMax = rho + uGeom.z;
+  float xMu = clamp((d - dMin) / max(dMax - dMin, 1e-4), 0.0, 1.0);
+  float xR = clamp(rho / uGeom.z, 0.0, 1.0);
+  return texture(uLut, vec2(xMu, xR) * uLutScale.xy + uLutScale.zw).rgb;
+}
+
+/**
+ * Fraction of the star's disc visible from a point at radius r with sun zenith cosine mu: the planet's
+ * shadow with a penumbra whose width is the star's angular size at the distance of the tangent point.
+ */
+float sunVisibility(float r, float mu) {
+  if (mu >= 0.0) return 1.0;
+  float tangentAlt = r * sqrt(max(1.0 - mu * mu, 0.0)) - uGeom.x;
+  float w = max(uSunAng * r * -mu, 1e-3);           // smoothstep needs edge0 < edge1
   return smoothstep(-w, w, tangentAlt);
 }
 
@@ -162,9 +297,8 @@ void main() {
   if (tp.x < tp.y && tp.y > t0) t1 = min(t1, max(tp.x, t0));
   if (t1 <= t0 + 1e-4) discard;
 
-  float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
   vec3 tView;
-  vec3 inscatter = march(vQ, d, t0, t1, jit, uPass > 0.5, tView);
+  vec3 inscatter = march(vQ, d, t0, t1, uPass > 0.5, tView);
   if (uPass < 0.5) fragColor = vec4(mix(vec3(1.0), tView, uIntensity), 1.0);
   else fragColor = vec4(inscatter * uIntensity, 0.0);
 

@@ -176,7 +176,7 @@ export function deriveAtmosphere(body: BodyBase): AtmosphereParams | null {
     giant ? GIANT_MIN_SCALE_HEIGHT * R : 0.0004 * R,
     0.5,
   );
-  const column = clamp(rayleighColumn(body), 0, COLUMN_MAX);
+  const column = clamp(rayleighColumn(body), 0, kind === 'dense' ? 1.2 : COLUMN_MAX);
   const rayleigh = {
     beta: [
       (RAYLEIGH_TAU_EARTH[0] * column) / H,
@@ -207,12 +207,13 @@ export function deriveAtmosphere(body: BodyBase): AtmosphereParams | null {
       g: 0.76,
       white: 0.85,
       absorb: 0.05,
-      ms: 0.3,
-      gain: 1.8,
+      ms: 0.35,
+      gain: 2.3,
     },
     dusty: { tau: 0.22, height: 1.0, g: 0.62, white: 0.0, absorb: 1.2, ms: 0.3, gain: 1.3 },
     hazy: { tau: 2.6, height: 1.5, g: 0.55, white: 0.0, absorb: 3.0, ms: 0.5, gain: 4.5 },
-    dense: { tau: 3.0, height: 1.0, g: 0.5, white: 0.15, absorb: 1.0, ms: 0.6, gain: 5.0 },
+    // The visible deck of a dense world is its cloud layer (drawn separately): only the haze above it is modelled.
+    dense: { tau: 0.6, height: 1.0, g: 0.5, white: 0.15, absorb: 1.0, ms: 0.6, gain: 2.0 },
     'gas-giant': { tau: 0.7, height: 1.2, g: 0.5, white: 0.5, absorb: 0.3, ms: 0.35, gain: 1.8 },
     'ice-giant': { tau: 0.3, height: 1.2, g: 0.5, white: 0.2, absorb: 0.3, ms: 0.35, gain: 1.8 },
   };

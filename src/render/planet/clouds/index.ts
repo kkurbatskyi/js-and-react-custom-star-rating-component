@@ -12,6 +12,8 @@ import { CloudLayer } from './CloudLayer';
 import { deriveClouds } from './params';
 
 export { CloudLayer } from './CloudLayer';
+export { cloudFieldGlsl } from './cloudField.glsl';
+export { cloudShadowGlsl } from './cloudShadow.glsl';
 export type { CloudParams, CloudStyle } from './params';
 export { deriveClouds } from './params';
 

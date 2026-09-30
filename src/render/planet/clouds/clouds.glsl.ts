@@ -15,6 +15,7 @@
  */
 import { common } from '../../shaders/common.glsl';
 import { noise } from '../../shaders/noise.glsl';
+import { skyEclipseGlsl } from '../atmosphere/eclipse.glsl';
 import { cloudFieldGlsl } from './cloudField.glsl';
 
 export const cloudVertex = /* glsl */ `
@@ -34,6 +35,7 @@ export const cloudFragment = /* glsl */ `
 ${common}
 ${noise}
 ${cloudFieldGlsl}
+${skyEclipseGlsl}
 
 uniform vec4 uGeom;        // x: cloud sphere radius, y: planet radius, z: 1 - oblateness
 uniform vec3 uCamQ;
@@ -44,6 +46,9 @@ uniform vec3 uColor;
 uniform vec3 uSunTau;
 uniform vec3 uSky;
 uniform vec4 uLook;        // max opacity, intensity, shadow tap (0/1), bump strength
+uniform float uSunAng;     // angular radius of the star (rad)
+uniform vec4 uOcc[4];      // eclipse casters (body frame centre, radius)
+uniform int uOccCount;
 
 in vec3 vQ;
 in vec3 vView;
@@ -79,6 +84,7 @@ void main() {
   float m = cloudMask(n, fp, 1.0, grad);
   float soft = uCloudA.z > 0.5 ? 0.24 : 0.12;
   float dens = smoothstep(-soft, soft, m);
+  if (uCloudA.w > 0.5) dens = mix(0.92, 1.0, dens);   // overcast: never a hole, only thinner and thicker
   if (dens <= 0.002) discard;
   float thick = clamp(m / 0.45, 0.0, 1.0);
 
@@ -102,7 +108,7 @@ void main() {
     float ms = cloudMask(ns, fp, 0.0, g2);
     shadow = clamp(1.0 - 1.5 * max(ms - m, 0.0), 0.25, 1.0);
   }
-  float horizon = smoothstep(-0.12, 0.03, mu0);
+  float horizon = smoothstep(-0.12, 0.03, mu0) * skyEclipseAll(pHit, uSun, uOcc, uOccCount, uSunAng);
   vec3 sunT = exp(-uSunTau * cloudAirmass(mu0));
   vec3 view = -d;
   // Forward scattering: thin cloud edges glow when the sun is behind them (view direction against the sun).
@@ -110,7 +116,7 @@ void main() {
   vec3 direct = uSunRad * sunT * (diffuse * shadow * horizon);
   vec3 rim = uSunRad * sunT * (0.7 * silver * horizon);
   vec3 ambient = uSky * uSunRad * (0.02 + 0.09 * clamp(mu0 + 0.25, 0.0, 1.0)) * mix(vec3(1.0), sunT, 0.5);
-  float bright = mix(0.8, 1.0, thick);
+  float bright = mix(uCloudA.w > 0.5 ? 0.6 : 0.8, 1.0, thick);
   vec3 lit = uColor * bright * (direct + rim + ambient);
   if (inside) lit *= 0.45;                       // seen from below: light through the deck
 
