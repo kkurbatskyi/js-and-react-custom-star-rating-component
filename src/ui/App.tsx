@@ -12,7 +12,13 @@ import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState }
 import { useStore } from '../state/store';
 import { starIdOf } from '../universe';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { COMPACT_MAX_WIDTH, LayoutContext, type LayoutInfo, useReducedMotion } from './hooks';
+import {
+  COMPACT_MAX_WIDTH,
+  LayoutContext,
+  type LayoutInfo,
+  useReducedMotion,
+  useViewInsets,
+} from './hooks';
 import { Coordinates } from './hud/Coordinates';
 import { FpsMeter } from './hud/FpsMeter';
 import { HoverTooltip } from './hud/HoverTooltip';
@@ -103,6 +109,8 @@ export function App() {
   const hasSubject = !!(selection ?? selectionForTarget(flightTarget ?? focus));
   const sheet = layout.compact && hasSubject ? sheetStateOf(collapsed, full) : 'none';
   const panel = !layout.compact && !collapsed ? 'open' : 'closed';
+  // What can mount, unmount or move the chrome that covers the view.
+  useViewInsets(root, layout.compact, [ready, photoMode, collapsed, hasSubject, sheet]);
 
   return (
     <LayoutContext.Provider value={layout}>

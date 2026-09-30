@@ -79,18 +79,20 @@ export function Onboarding() {
           </li>
         ))}
       </ul>
-      <p className="sd-note__wink">
-        This used to be a star-rating component. It now rates actual stars: open any star or planet
-        and give it some.
-      </p>
-      <button
-        type="button"
-        className="sd-btn sd-btn--primary sd-note__go"
-        onClick={dismiss}
-        data-autofocus
-      >
-        Begin exploring
-      </button>
+      <div className="sd-note__foot">
+        <p className="sd-note__wink">
+          This used to be a star-rating component. It now rates actual stars: open any star or
+          planet and give it some.
+        </p>
+        <button
+          type="button"
+          className="sd-btn sd-btn--primary sd-note__go"
+          onClick={dismiss}
+          data-autofocus
+        >
+          Begin exploring
+        </button>
+      </div>
     </aside>
   );
 }

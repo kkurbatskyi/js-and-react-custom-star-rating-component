@@ -175,6 +175,9 @@ void main() {
     emis = isSea ? 0.0 : cityLights(p, h, Tk, ice, slope);
   }
   emis *= 1.0 - ice;
+  // Lava is stored as radiant energy E = e^2.2 so that mip filtering and magnification conserve it: the runtime
+  // recovers the temperature ramp from e = E^(1/2.2). (Without this, thin bright cracks fade out with distance.)
+  if (uEmissiveKind == 2) emis = pow(emis, 2.2);
 
   // ---- baked cavity occlusion: bowls darker, crests lighter
   if (!isSea) col *= clamp(1.0 - uAo * cavity(uv, h), 0.5, 1.3);

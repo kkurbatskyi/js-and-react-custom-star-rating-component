@@ -124,17 +124,12 @@ void main() {
 
   // ---- bands and turbulence
   float wind = profileAt(lat).y;
-  int oct = int(clamp(floor(log2(1.0 / max(px * uBandFreq * 6.0, 1e-6))) + 1.0, 3.0, uLite > 0.5 ? 3.0 : 7.0));
-  vec3 f;
-  if (uLite > 0.5) {
-    f = flowLayer(ps, wind, 0.5, oct);
-  } else {
-    float cyc = uFlow / uCycleDays;
-    float t0 = fract(cyc);
-    float t1 = fract(cyc + 0.5);
-    float w0 = 1.0 - abs(2.0 * t0 - 1.0);
-    f = flowLayer(ps, wind, t0, oct) * w0 + flowLayer(ps, wind, t1, oct) * (1.0 - w0);
-  }
+  int oct = int(clamp(floor(log2(1.0 / max(px * uBandFreq * 6.0, 1e-6))) + 1.0, 3.0, uLite > 0.5 ? 4.0 : 7.0));
+  float cyc = uFlow / uCycleDays;
+  float t0 = fract(cyc);
+  float t1 = fract(cyc + 0.5);
+  float w0 = 1.0 - abs(2.0 * t0 - 1.0);
+  vec3 f = flowLayer(ps, wind, t0, oct) * w0 + flowLayer(ps, wind, t1, oct) * (1.0 - w0);
   float latD = lat + 0.05 * uTurbulence * f.x;
   vec3 prof = profileAt(latD);
   float t = 0.5 + 0.62 * prof.x * uContrast + uTurbulence * (0.12 + 0.30 * prof.z) * f.y;

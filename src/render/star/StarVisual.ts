@@ -55,6 +55,10 @@ const SPRITE_FADE_PX: readonly [number, number] = [3, 24];
 /** Below this disc radius (CSS px) the photosphere mesh is skipped (the sprite carries the light). */
 const MIN_DISC_PX = 0.08;
 const CORONA_FADE_PX: readonly [number, number] = [4, 14];
+/** Disc radii (CSS px) over which the photosphere eases from `brightness` to `closeBrightness`. */
+const EXPOSURE_PX: readonly [number, number] = [5, 50];
+/** The corona is drawn as if the disc were at least this bright, so it stays legible when stopped down. */
+const CORONA_MIN_RADIANCE = 4.5;
 const TAU = Math.PI * 2;
 const Y_AXIS = new Vector3(0, 1, 0);
 
@@ -91,6 +95,7 @@ export class StarVisual implements IStarVisual {
     uLimbSoft: new Uniform(0),
     uFlare: new Uniform(new Vector4(0, 0, 1, 0)),
     uQuality: new Uniform(2),
+    uSaturation: new Uniform(1.5),
   };
   private readonly coronaU = {
     uExtent: new Uniform(6),
@@ -259,6 +264,7 @@ export class StarVisual implements IStarVisual {
       einsteinRadiusPx: 0,
       innerRadiusPx: 0,
       strength: 0,
+      viewportHeightPx: 1,
     };
     if (this.exotics?.replacesSphere) {
       this.disc.visible = false;
@@ -330,6 +336,14 @@ export class StarVisual implements IStarVisual {
 
     if (this.exotics?.replacesSphere) return;
 
+    // Resolved stars are drawn at a stopped-down radiance so their surface detail survives ACES.
+    const exposureT = smoothstep(
+      Math.log(EXPOSURE_PX[0]),
+      Math.log(EXPOSURE_PX[1]),
+      Math.log(Math.max(discPx, 1e-3)),
+    );
+    const brightness = look.brightness * (look.closeBrightness / look.brightness) ** exposureT;
+
     // ── photosphere
     this.disc.visible = discPx > MIN_DISC_PX;
     if (this.disc.visible) {
@@ -338,6 +352,8 @@ export class StarVisual implements IStarVisual {
       u.uPxKm.value = pxKm;
       u.uDiscPx.value = discPx * dpr;
       u.uIntensity.value = o.intensity;
+      u.uBrightness.value = brightness;
+      u.uSaturation.value = 2.0 - 0.85 * smoothstep(6000, 12000, look.tempK);
       u.uTime.value = time;
       (u.uBodyFromView.value as Matrix3).setFromMatrix4(this.mBody.multiply(this.mView));
       this.updateFlare(time, u.uFlare.value as Vector4);
@@ -349,6 +365,7 @@ export class StarVisual implements IStarVisual {
     if (this.corona.visible) {
       const c = this.coronaU;
       c.uCoronaVis.value = vis;
+      c.uBrightness.value = Math.max(brightness, CORONA_MIN_RADIANCE);
       c.uIntensity.value = o.intensity;
       c.uTime.value = time;
       c.uPxPerR.value = discPx * dpr;

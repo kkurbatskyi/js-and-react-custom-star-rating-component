@@ -132,16 +132,19 @@
 }
 
 /* ── first-run field notes ─────────────────────────────────────────────────────────────── */
-/* Centred in the area the info panel leaves free, clear of the camera buttons and the bottom row. */
+/*
+ * Low in the free area, beside the minimap and above the clock: the engine now frames the focused
+ * object in the middle of that area (setViewInsets), so the note must not sit on top of it.
+ */
 .sd-note {
   position: absolute;
   z-index: var(--sd-z-note);
-  left: calc(var(--sd-inset) + var(--sd-safe-l) + 56px);
+  left: calc(var(--sd-inset) + var(--sd-safe-l) + 178px + var(--sd-s-4));
   right: calc(var(--sd-right-inset) + var(--sd-inset));
-  bottom: calc(var(--sd-inset) + var(--sd-safe-b) + 196px);
+  bottom: calc(var(--sd-inset) + var(--sd-safe-b) + 60px);
   width: auto;
-  max-width: 560px;
-  max-height: calc(100% - var(--sd-topbar-h) - 196px - var(--sd-inset) - var(--sd-s-4));
+  max-width: 600px;
+  max-height: calc(100% - var(--sd-topbar-h) - 60px - var(--sd-inset) - var(--sd-s-4));
   margin-inline: auto;
   overflow: auto;
   display: grid;
@@ -172,7 +175,7 @@
 }
 .sd-note__tips {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--sd-s-4);
   margin: 4px 0 0;
   padding: 12px 0 0;
@@ -202,16 +205,24 @@
   border: 1px solid var(--sd-accent-dim);
   border-radius: 50%;
 }
+.sd-note__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sd-s-3) var(--sd-s-4);
+}
 .sd-note__wink {
+  flex: 1 1 260px;
   margin: 0;
   font: italic 500 18px / 1.35 var(--sd-font-display);
   color: var(--sd-text);
 }
 .sd-note__go {
-  justify-self: start;
+  flex: none;
 }
-/* Short windows: keep the icons and titles, drop the small print. */
-@container sd (max-height: 660px) {
+/* Shorter windows: keep the icons and titles, drop the small print. */
+@container sd (max-height: 800px) {
   .sd-note {
     gap: var(--sd-s-2);
     padding: 12px 16px 14px 20px;
@@ -243,6 +254,9 @@
   }
   .sd-note__tips li strong + span {
     display: inline;
+  }
+  .sd-note__foot {
+    display: grid;
   }
   .sd-note__go {
     justify-self: stretch;

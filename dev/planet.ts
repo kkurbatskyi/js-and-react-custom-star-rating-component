@@ -6,6 +6,7 @@
  *   ?view=far|mid|close|terminator|crescent|surface   camera preset (surface: &alt=<km>)
  *   ?sun=<azimuthDeg>,<elevationDeg>   sun relative to the camera (0,0 = behind the camera)
  *   ?spin=<deg>           rotation about the spin axis     ?lite=1   the cheap 'lite' visual
+ *   ?compare=1&px=30      lite (left) and full (right) side by side at a projected radius of px pixels
  *   ?debug=albedo|normal|height   surface debug views      ?moon=1   add the first moon as an eclipse caster
  */
 import * as THREE from 'three';
@@ -43,13 +44,25 @@ const VIEWS: Record<string, { dist: number; az: number; el: number; lat: number 
 const preset = VIEWS[view] ?? VIEWS.mid;
 if (!preset) throw new Error('no view preset');
 const alt = Number(params.get('alt') ?? R * 0.03);
-const distR = view === 'surface' ? 1 + alt / R : preset.dist;
-const latRad = THREE.MathUtils.degToRad(preset.lat);
+const compare = params.get('compare') === '1';
+// Compare mode uses a long lens so the two bodies (either side of centre) are seen from nearly the same angle.
+const FOV_DEG = compare ? 9 : 34;
+/** Camera distance (in radii) at which the body's projected radius is `px` pixels. */
+const distForPixelRadius = (px: number): number => {
+  const pxPerTan = window.innerHeight / 2 / Math.tan(THREE.MathUtils.degToRad(FOV_DEG / 2));
+  return Math.sqrt(1 + (pxPerTan / px) ** 2); // 1 / sin(theta), tan(theta) = px / pxPerTan
+};
+const distR = compare
+  ? distForPixelRadius(Number(params.get('px') ?? 30))
+  : view === 'surface'
+    ? 1 + alt / R
+    : preset.dist;
+const latRad = THREE.MathUtils.degToRad(compare ? 0 : preset.lat);
 const camDir = new THREE.Vector3(0, Math.sin(latRad), Math.cos(latRad));
 
 const h = createHarness({
   title: `${body.name} · ${body.type}`,
-  fov: 34,
+  fov: FOV_DEG,
   near: R * 1e-4,
   far: R * 400,
   cameraPosition: camDir.clone().multiplyScalar(R * distR),
@@ -62,6 +75,23 @@ const h = createHarness({
 const detail = params.get('lite') === '1' ? 'lite' : 'full';
 const visual = new PlanetVisual(body, { system }, h.quality, detail);
 h.scene.add(visual.object);
+// Compare mode: the same world as a 'lite' visual, drawn to the left of the full one.
+const twin = compare ? new PlanetVisual(body, { system }, h.quality, 'lite') : null;
+if (twin) {
+  h.scene.add(twin.object);
+  // Hold the screenshot until the lite twin (tiny bake, started from update()) is drawable too.
+  void h.waitFor(
+    new Promise<void>((resolve) => {
+      const off = h.onFrame(() => {
+        if (twin.drawable) {
+          off();
+          resolve();
+        }
+      });
+    }),
+  );
+}
+const COMPARE_OFFSET_R = 1.6;
 window.__PLANET__ = visual;
 if (params.get('shells') === '0') {
   // Judge the surface on its own: hide atmosphere, clouds and rings (the sky specialist's parts).
@@ -121,6 +151,9 @@ const u: PlanetUniforms = {
   intensity: 1,
 };
 
+const twinPos = new THREE.Vector3();
+const twinUniforms: PlanetUniforms = { ...u, positionKm: new THREE.Vector3() };
+
 const moon =
   'moons' in body && Array.isArray((body as { moons?: unknown[] }).moons)
     ? (body as unknown as { moons: { radiusKm: number }[] }).moons[0]
@@ -158,7 +191,21 @@ h.onFrame((f) => {
       .addScaledVector(right, R * 0.35)
       .addScaledVector(up, R * -0.1);
   }
-  visual.update(f, u);
+  if (twin) {
+    // The full visual sits right of centre, the lite one left; both share sun, orientation and time.
+    const scratch = twinPos;
+    scratch.set(COMPARE_OFFSET_R * R, 0, 0);
+    h.relative(scratch, rel);
+    visual.update(f, u);
+    scratch.set(-COMPARE_OFFSET_R * R, 0, 0);
+    h.relative(scratch, twinUniforms.positionKm);
+    twinUniforms.sunIntensity = u.sunIntensity;
+    twinUniforms.intensity = u.intensity;
+    twinUniforms.sunAngularRadiusRad = u.sunAngularRadiusRad;
+    twin.update(f, twinUniforms);
+  } else {
+    visual.update(f, u);
+  }
 });
 
 /** Area-weighted coverage of the baked surface: ocean (height below sea level) and ice, read back from the cubes. */

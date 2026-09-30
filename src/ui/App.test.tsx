@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerEngineCommands } from '../state/bridge';
+import { registerEngineCommands, type ViewInsets } from '../state/bridge';
 import { store } from '../state/store';
 import { App } from './App';
 import { useSheetStore } from './lib/sheetStore';
@@ -115,6 +115,7 @@ describe('App', () => {
       zoomBy() {},
       resetView: () => resets++,
       capture: async () => null,
+      setViewInsets() {},
     });
     render(<App />);
     select('star', homeId); // selection and focus agree
@@ -244,5 +245,121 @@ describe('App', () => {
       fireEvent.click(screen.getByRole('button', { name: /Controls & shortcuts/ }));
       expect(screen.getByRole('dialog', { name: /Controls/ })).toBeTruthy();
     });
+  });
+});
+
+describe('App → engine view insets', () => {
+  let calls: ViewInsets[];
+  let unregister: () => void;
+  const last = () => calls.at(-1);
+
+  const restore: (() => void)[] = [];
+  /** Override a layout getter wherever happy-dom defines it (walking up the prototype chain). */
+  function stub(name: string, get: (el: HTMLElement) => number) {
+    let proto: object | null = HTMLElement.prototype;
+    while (proto && !Object.getOwnPropertyDescriptor(proto, name))
+      proto = Object.getPrototypeOf(proto);
+    const owner = proto ?? HTMLElement.prototype;
+    const original = Object.getOwnPropertyDescriptor(owner, name);
+    Object.defineProperty(owner, name, {
+      configurable: true,
+      get(this: HTMLElement) {
+        return get(this);
+      },
+    });
+    restore.push(() => {
+      if (original) Object.defineProperty(owner, name, original);
+      else Reflect.deleteProperty(owner, name);
+    });
+  }
+
+  /** happy-dom has no layout: report the geometry a real browser would for each piece of chrome. */
+  function geometry(g: {
+    layout: [number, number];
+    topbar: [top: number, height: number];
+    panel: [left: number, top: number];
+  }) {
+    while (restore.length) restore.pop()?.();
+    const is = (el: Element, cls: string) => el.classList.contains(cls);
+    stub('clientWidth', (el) => (is(el, 'sd-layout') ? g.layout[0] : 0));
+    stub('clientHeight', (el) => (is(el, 'sd-layout') ? g.layout[1] : 0));
+    stub('offsetTop', (el) =>
+      is(el, 'sd-topbar') ? g.topbar[0] : is(el, 'sd-info') ? g.panel[1] : 0,
+    );
+    stub('offsetHeight', (el) => (is(el, 'sd-topbar') ? g.topbar[1] : 0));
+    stub('offsetLeft', (el) => (is(el, 'sd-info') ? g.panel[0] : 0));
+  }
+
+  beforeEach(() => {
+    calls = [];
+    unregister = registerEngineCommands({
+      zoomBy() {},
+      resetView() {},
+      capture: async () => null,
+      setViewInsets: (insets) => calls.push(insets),
+    });
+  });
+  afterEach(() => {
+    unregister();
+    while (restore.length) restore.pop()?.();
+  });
+
+  it('desktop: reports the top bar and the info plate', () => {
+    geometry({ layout: [1280, 800], topbar: [0, 58], panel: [884, 62] });
+    render(<App />);
+    select('planet', halcyon.id);
+    expect(last()).toEqual({ top: 58, right: 396, bottom: 0, left: 0 });
+  });
+
+  it('desktop: a collapsed plate frees the right side again, and expanding takes it back', () => {
+    geometry({ layout: [1280, 800], topbar: [0, 58], panel: [884, 62] });
+    render(<App />);
+    select('planet', halcyon.id);
+    fireEvent.click(screen.getByRole('button', { name: 'Hide details' }));
+    expect(last()).toEqual({ top: 58, right: 0, bottom: 0, left: 0 });
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
+    expect(last()?.right).toBe(396);
+  });
+
+  it('phone: reports the sheet as a bottom inset, and follows it as it changes', () => {
+    layoutSize(390, 844);
+    geometry({ layout: [390, 844], topbar: [0, 98], panel: [0, 668] });
+    render(<App />);
+    act(() => {
+      store.setState({ selection: { kind: 'planet', id: halcyon.id } });
+    });
+    expect(last()).toEqual({ top: 98, right: 0, bottom: 176, left: 0 });
+    geometry({ layout: [390, 844], topbar: [0, 98], panel: [0, 372] }); // half-open
+    fireEvent.click(screen.getByRole('button', { name: 'Expand details' }));
+    expect(last()?.bottom).toBe(472);
+  });
+
+  it('phone: no selection, no sheet, no bottom inset', () => {
+    layoutSize(390, 844);
+    geometry({ layout: [390, 844], topbar: [0, 98], panel: [0, 668] });
+    render(<App />);
+    expect(last()).toEqual({ top: 98, right: 0, bottom: 0, left: 0 });
+  });
+
+  it('photo mode gives the whole view back', () => {
+    geometry({ layout: [1280, 800], topbar: [0, 58], panel: [884, 62] });
+    render(<App />);
+    expect(last()?.right).toBe(396);
+    act(() => store.getState().setPhotoMode(true));
+    expect(last()).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+  });
+
+  it('re-sends once the engine is ready (it registers its commands just before)', () => {
+    geometry({ layout: [1280, 800], topbar: [0, 58], panel: [884, 62] });
+    act(() => {
+      store.setState({ ready: false });
+    });
+    render(<App />);
+    const before = calls.length;
+    act(() => {
+      store.setState({ ready: true });
+    });
+    expect(calls.length).toBeGreaterThan(before);
+    expect(last()).toEqual({ top: 58, right: 396, bottom: 0, left: 0 });
   });
 });

@@ -316,6 +316,24 @@ export class SurfaceBaker {
     this.phase = 'compile';
   }
 
+  /**
+   * Compile the three bake programs without rendering (for `prewarmPlanetPrograms`). Resolves when they
+   * are ready; a later `step` then starts baking immediately.
+   */
+  async warm(renderer: WebGLRenderer): Promise<void> {
+    if (this.disposed) return;
+    if (this.phase === 'init') this.init(renderer);
+    if (this.compileDone || !this.scene || !this.camera || !this.heightRT || this.compileStarted)
+      return;
+    this.compileStarted = true;
+    const prev = renderer.getRenderTarget();
+    renderer.setRenderTarget(this.heightRT);
+    const compiled = renderer.compileAsync(this.scene, this.camera);
+    renderer.setRenderTarget(prev);
+    await compiled.catch(() => undefined);
+    this.compileDone = true;
+  }
+
   private ensureCompile(renderer: WebGLRenderer): void {
     if (this.compileDone) {
       this.phase = 'terrain';

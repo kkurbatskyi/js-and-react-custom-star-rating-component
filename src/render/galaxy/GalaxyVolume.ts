@@ -58,6 +58,8 @@ export class GalaxyVolume {
   /** Linear fraction of the drawing buffer's size; 0 disables the pass. */
   scale: number;
   steps: number;
+  /** Temporal accumulation (each frame is also spatially denoised, so off still looks clean). */
+  temporal = true;
 
   readonly uniforms = {
     uCameraLy: new Uniform(new Vector3()),
@@ -96,6 +98,7 @@ export class GalaxyVolume {
   private readonly history = [makeTarget(LinearFilter), makeTarget(LinearFilter)] as const;
   private readonly resolveUniforms = {
     uCurrent: new Uniform(this.marchTarget.texture),
+    uGuide: new Uniform(this.marchTarget.textures[1] ?? null),
     uHistory: new Uniform(this.history[0].texture),
     uPrevViewProj: new Uniform(new Matrix4()),
     uCamDelta: new Uniform(new Vector3()),
@@ -208,7 +211,7 @@ export class GalaxyVolume {
     const r = this.resolveUniforms;
     r.uCamDelta.value.subVectors(cameraLy, this.prevCameraLy);
     const jump = r.uCamDelta.value.length() > 0.1 * Math.max(cameraLy.length(), 1000);
-    this.accumulated = !this.hasPrevious || jump ? 0 : this.accumulated + 1;
+    this.accumulated = !this.temporal || !this.hasPrevious || jump ? 0 : this.accumulated + 1;
     r.uAlpha.value = Math.max(1 / (this.accumulated + 1), MIN_BLEND);
     const next = 1 - this.current;
     const read = this.history[this.current];

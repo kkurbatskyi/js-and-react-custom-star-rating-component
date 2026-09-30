@@ -41,4 +41,6 @@ export interface LensState {
   innerRadiusPx: number;
   /** 0..1 fade. */
   strength: number;
+  /** CSS height of the viewport the px values refer to. */
+  viewportHeightPx: number;
 }

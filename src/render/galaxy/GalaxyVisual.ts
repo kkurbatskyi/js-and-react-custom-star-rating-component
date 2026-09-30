@@ -112,6 +112,11 @@ export class GalaxyVisual implements IGalaxyVisual {
     this.volume.resetHistory();
   }
 
+  /** Temporal accumulation of the volume pass (on by default; every frame is denoised anyway). */
+  setTemporal(on: boolean): void {
+    this.volume.temporal = on;
+  }
+
   /** Regenerate the particles (after changing colour temperatures or saturation in `look`). */
   rebuildParticles(): void {
     this.particles.rebuild(this.profile.particles, this.particleOptions());
@@ -218,7 +223,7 @@ export class GalaxyVisual implements IGalaxyVisual {
       5 * g.bulgeALy * g.bulgeQ,
       4 * g.thinHeightLy,
     );
-    u.uStepK.value.set(0.3, 0.12, 0.16, g.dustHeightLy); // w: rendered dust height (syncLook)
+    u.uStepK.value.set(0.3, 0.12, 0.11, g.dustHeightLy); // w: rendered dust height (syncLook)
     u.uStepLimits.value.set(25, 6000, 1500);
   }
 

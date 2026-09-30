@@ -23,8 +23,13 @@ export interface StarLook {
   color: RGB;
   /** Colour of prominences / chromosphere (Halpha-like, pushed towards the star's hue). */
   hotColor: RGB;
-  /** Disc-averaged photosphere radiance (HDR). */
+  /** Disc-averaged photosphere radiance (HDR) while the star is a small disc or a point. */
   brightness: number;
+  /**
+   * Radiance once the disc is large on screen. A camera stops down for a resolved sun (auto-exposure
+   * in spirit): at 14 the whole disc sits on the tone curve's shoulder and no surface detail survives.
+   */
+  closeBrightness: number;
   /** Granulation contrast 0..1.3 (0 = smooth radiative envelope). */
   convection: number;
   /** Convection cells across one stellar radius. */
@@ -65,6 +70,7 @@ export function starLook(star: StarDetails): StarLook {
 
   // Hot photospheres are brighter per unit area (sigma T^4), but the HDR budget tops out ~40.
   const brightness = clamp(14 * (tempK / 5772), 6, 40);
+  const closeBrightness = clamp(0.6 * (tempK / 5772) ** 0.5, 0.35, 1.0);
   const hotColor = saturateRGB(blackbodyRGB(Math.min(tempK, 6500) * 0.72), 1.15);
 
   const base: StarLook = {
@@ -73,14 +79,15 @@ export function starLook(star: StarDetails): StarLook {
     color,
     hotColor: [Math.max(hotColor[0], 0.9), hotColor[1] * 0.42, hotColor[2] * 0.42],
     brightness,
+    closeBrightness,
     convection: 0,
     granuleScale: 24,
     activity: 0,
     spotAnywhere: 0,
     limbSoft: 0,
     coronaExtent: 6,
-    coronaGain: 0.2,
-    coronaFall: 3.2,
+    coronaGain: 0.09,
+    coronaFall: 4.4,
     haloGain: 0.03,
     streamers: 0.7,
     chromosphere: 0.8,
@@ -92,12 +99,13 @@ export function starLook(star: StarDetails): StarLook {
 
   switch (kind) {
     case 'black-hole':
-      return { ...base, archetype: 'hole', brightness: 0 };
+      return { ...base, archetype: 'hole', brightness: 0, closeBrightness: 0 };
     case 'neutron-star':
       return {
         ...base,
         archetype: 'neutron',
         brightness: 40,
+        closeBrightness: 1.0,
         limbSoft: 0,
         coronaExtent: 3,
         coronaGain: 0,
@@ -109,6 +117,7 @@ export function starLook(star: StarDetails): StarLook {
       return {
         ...base,
         brightness: 40,
+        closeBrightness: 1.0,
         coronaExtent: 4,
         coronaGain: 0.0,
         haloGain: 0.05,
@@ -149,7 +158,7 @@ export function starLook(star: StarDetails): StarLook {
         coronaExtent: 4.5,
         coronaGain: 0.05,
         coronaFall: 2.2,
-        haloGain: 0.13,
+        haloGain: 0.06,
         streamers: 0,
         chromosphere: 0,
       };
@@ -161,7 +170,7 @@ export function starLook(star: StarDetails): StarLook {
         coronaExtent: 4.5,
         coronaGain: 0.08,
         coronaFall: 2.6,
-        haloGain: 0.08,
+        haloGain: 0.05,
         streamers: 0.2,
         chromosphere: 0,
         activity: activity * 0.15,
@@ -193,7 +202,7 @@ export function starLook(star: StarDetails): StarLook {
         ...base,
         convection: 1,
         granuleScale: 28,
-        activity: Math.min(1, activity * 1.3 + 0.15),
+        activity: Math.min(0.85, activity * 1.1 + 0.05),
         spotAnywhere: 1,
         coronaExtent: 5,
         coronaGain: 0.18,

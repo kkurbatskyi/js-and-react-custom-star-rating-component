@@ -131,7 +131,7 @@ void galaxySample(vec3 p, float lod, float dist, out vec3 emission, out vec3 ext
   float n = m.a;
   float near = uNear.x * exp(-dist / uNear.y);
   if (near > 0.01) {
-    float n3 = 0.6 * texture(uNoise, p * (1.0 / 1730.0)).r + 0.4 * texture(uNoise, p.zyx * (1.0 / 410.0)).r;
+    float n3 = 0.72 * texture(uNoise, p * (1.0 / 1730.0)).r + 0.28 * texture(uNoise, p.zyx * (1.0 / 410.0)).r;
     n = mix(n, 3.0 * (n3 - 0.5), min(near, 1.0));
   }
   float disk = galDiskRadial(r);
@@ -216,6 +216,7 @@ export const resolveFragment = /* glsl */ `
 precision highp float;
 ${viewRay}
 uniform sampler2D uCurrent;
+uniform sampler2D uGuide;
 uniform sampler2D uHistory;
 uniform mat4 uPrevViewProj;
 uniform vec3 uCamDelta;
@@ -228,16 +229,28 @@ void main() {
   ivec2 size = textureSize(uCurrent, 0);
   ivec2 ip = ivec2(gl_FragCoord.xy);
   vec4 cur = texelFetch(uCurrent, ip, 0);
+  float transC = exp(-texelFetch(uGuide, ip, 0).r);
+  // Spatial denoise of this frame alone: a 3x3 tent, cross-bilateral on the (deterministic) dust
+  // transmittance so lane edges survive (compared as e^-tau: opaque vs opaque is no edge). Interleaved-gradient jitter spreads the 9 taps over the
+  // whole jitter range, so one frame is clean without temporal accumulation.
+  vec3 sum = vec3(0.0);
+  float wSum = 0.0;
   vec3 lo = cur.rgb;
   vec3 hi = cur.rgb;
   for (int j = -1; j <= 1; j++) {
     for (int i = -1; i <= 1; i++) {
-      vec3 c = texelFetch(uCurrent, clamp(ip + ivec2(i, j), ivec2(0), size - 1), 0).rgb;
-      lo = min(lo, c);
-      hi = max(hi, c);
+      ivec2 c = clamp(ip + ivec2(i, j), ivec2(0), size - 1);
+      vec3 col = texelFetch(uCurrent, c, 0).rgb;
+      float trans = exp(-texelFetch(uGuide, c, 0).r);
+      float w = float((2 - abs(i)) * (2 - abs(j))) * exp(-8.0 * abs(trans - transC));
+      sum += col * w;
+      wSum += w;
+      lo = min(lo, col);
+      hi = max(hi, col);
     }
   }
-  vec3 result = cur.rgb;
+  vec3 filtered = sum / wSum;
+  vec3 result = filtered;
   if (uAlpha < 1.0) {
     vec3 x = viewRay(vUv) * (cur.a * 1e3) + uCamDelta;
     vec4 clip = uPrevViewProj * vec4(x, 1.0);
@@ -246,7 +259,7 @@ void main() {
       if (all(greaterThanEqual(puv, vec2(0.0))) && all(lessThanEqual(puv, vec2(1.0)))) {
         vec3 pad = 0.1 * (hi - lo);
         vec3 history = clamp(texture(uHistory, puv).rgb, lo - pad, hi + pad);
-        result = mix(history, cur.rgb, uAlpha);
+        result = mix(history, filtered, uAlpha);
       }
     }
   }
@@ -274,8 +287,8 @@ void main() {
     return;
   }
   // Joint bilateral upsampling guided by dust: the 2x2 low-res taps are weighted by how similar
-  // their optical depth is to this pixel's, so lane edges stay sharp at full resolution.
-  float tau = dustGuideTau(uCameraLy, viewRay(vUv), uPixelAngleFull);
+  // their dust transmittance is to this pixel's, so lane edges stay sharp at full resolution.
+  float trans = exp(-dustGuideTau(uCameraLy, viewRay(vUv), uPixelAngleFull));
   ivec2 size = textureSize(uVolume, 0);
   vec2 st = vUv * vec2(size) - 0.5;
   vec2 base = floor(st);
@@ -285,9 +298,9 @@ void main() {
   for (int j = 0; j < 2; j++) {
     for (int i = 0; i < 2; i++) {
       ivec2 c = clamp(ivec2(base) + ivec2(i, j), ivec2(0), size - 1);
-      float tapTau = texelFetch(uGuide, c, 0).r;
+      float tapTrans = exp(-texelFetch(uGuide, c, 0).r);
       float bilinear = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y);
-      float w = bilinear * exp(-2.0 * abs(tapTau - tau)) + 1e-5;
+      float w = bilinear * exp(-8.0 * abs(tapTrans - trans)) + 1e-5;
       sum += texelFetch(uVolume, c, 0).rgb * w;
       wSum += w;
     }

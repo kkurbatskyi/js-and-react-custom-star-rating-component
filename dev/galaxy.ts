@@ -6,6 +6,8 @@
  *   ?near=<ly>         particle near-fade distance (default 2500, as the app)
  *   ?validate=1        compare the GPU map bake with the CPU model → window.__GALAXY_CHECK__
  *   ?look=k:v,k:v      override numeric `GalaxyLook` fields (A/B screenshots without code edits)
+ *   ?temporal=0        no temporal accumulation (check that a single frame is clean)
+ *   ?settle=<frames>   frames to wait before __READY__ (default 12; the app waits ~3)
  *   ?probe=u,v;u,v     HDR volume radiance + distance at screen uvs → window.__GALAXY_PROBE__
  *
  * Harness parameters (?t=, ?quality=, ?ui=0, ?cam=/&target=, …) work as usual (dev/README.md).
@@ -177,6 +179,7 @@ if (probeParam) {
     }),
   );
 }
-// Let the temporal accumulation of the volume pass converge before screenshots.
-void h.waitFor(h.frames(12));
+if (url.get('temporal') === '0') visual.setTemporal(false);
+// Frames before __READY__ (on top of the harness's 5): the volume's temporal accumulation.
+void h.waitFor(h.frames(Number(url.get('settle') ?? 12)));
 h.start();

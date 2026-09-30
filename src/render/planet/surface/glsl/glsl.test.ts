@@ -8,7 +8,6 @@ import { cubeGlsl } from './cube.glsl';
 import { giantFragment, giantVertex } from './giant.glsl';
 import { gradientGlsl } from './gradient.glsl';
 import { lightingGlsl } from './lighting.glsl';
-import { liteFragment, liteVertex } from './lite.glsl';
 import { rockyFragment, rockyVertex } from './rocky.glsl';
 
 const chunks = {
@@ -22,8 +21,6 @@ const chunks = {
   rockyFragment,
   giantVertex,
   giantFragment,
-  liteVertex,
-  liteFragment,
 };
 
 describe('planet GLSL sources', () => {

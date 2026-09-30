@@ -29,7 +29,8 @@ export function isPlanetType(s: string | null): s is PlanetType {
   return s !== null && (TYPES as readonly string[]).includes(s);
 }
 
-function bodyById(id: string): PickedBody | null {
+/** Resolve `home.<letter>[.<moon>]` (Aurelia) or a full body id. */
+export function bodyById(id: string): PickedBody | null {
   const u = getUniverse();
   const home = u.homeStarId();
   const resolved = id.startsWith('home.') ? `${home}.${id.slice(5)}` : id;
@@ -40,6 +41,19 @@ function bodyById(id: string): PickedBody | null {
     system: found.system,
     planetIndex: found.moon ? -1 : found.planet.index,
   };
+}
+
+/** Distance from the body to its star: a planet's own orbit radius, or (for a moon) its parent planet's. */
+export function starDistanceKm(picked: PickedBody): number {
+  const { body, system, planetIndex } = picked;
+  const parent =
+    planetIndex >= 0 ? body : system.planets.find((p) => p.moons.some((m) => m.id === body.id));
+  return Math.max(parent?.orbit.semiMajorAxisKm ?? body.orbit.semiMajorAxisKm, 1);
+}
+
+/** Angular radius of the star seen from the body (radians). */
+export function sunAngularRadius(picked: PickedBody): number {
+  return Math.atan((picked.system.star.radiusSolar * 695_700) / starDistanceKm(picked));
 }
 
 /** All bodies (planets and moons) of the home system and its neighbourhood, home first. */

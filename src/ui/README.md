@@ -65,6 +65,13 @@ box, not the window — dev/ui.tsx previews the phone layout inside a 390×844 f
   owns `⌘/Ctrl+K` and `/` (search), `?` (help), `L` (logbook), `M` (mute) and **Escape while something
   is open** (photo preview → dialog → photo mode). The handler runs in the capture phase and calls
   `stopPropagation()` for exactly those, so the engine's own Escape (“up a level”) never double-fires.
+* **View insets**: `useViewInsets` (hooks.ts, maths in `lib/viewInsets.ts`) reports the part of the
+  view the chrome covers to `engineCommands().setViewInsets({ top, right, bottom, left })` — the top
+  bar's bottom edge, the desktop plate's width + gutter (0 when collapsed), the phone sheet's visible
+  height — from layout metrics (`offsetLeft`/`offsetTop`, so slide-in transforms never skew it),
+  re-measured by a ResizeObserver (one call per frame) and whenever the panel mounts, collapses or
+  changes snap. Photo mode reports all zeros, and `store.ready` is part of the effect key because the
+  engine registers its commands just before it flags ready. Caps keep the free area ≥ 40 %.
 * **Photo mode** unmounts every other piece of UI, sets `html[data-sd-photo="on"]`, offers a shutter
   (`engineCommands().capture()`), and shows the PNG in an in-page preview with a download link — hosts
   may block downloads, so right-click / long-press also works. Object URLs are revoked on close.

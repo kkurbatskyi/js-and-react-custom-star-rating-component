@@ -2,15 +2,22 @@
  * PlanetVisual — a world you can orbit: baked, lit, shaded surface + atmosphere, clouds and rings.
  *
  * Composition (all children of the root group, which carries `positionKm` and `orientation`):
- *   surface  — 'full' rocky worlds: `SurfaceBaker` (time-sliced GPU bake of albedo/relief cube maps) +
- *              `RockySurface`; gas/ice giants: `GiantSurface` (analytic flowing bands, no bake);
- *              'lite': `LiteSurface` (rocky) or `GiantSurface` in lite mode — no bake, ready at once.
+ *   surface  — rocky worlds: `SurfaceBaker` (time-sliced GPU bake of albedo/relief cube maps) +
+ *              `RockySurface`; gas/ice giants: `GiantSurface` (analytic flowing bands, no bake).
  *   atmosphere, clouds — the sky specialist's factories, on full visuals only.
  *   rings    — the sky specialist's factory, on both.
  *
- * `prepare(renderer, budgetMs)` advances the bake and compiles the shaders asynchronously (no hitch on
- * arrival); `ready` turns true when the visual looks final. Until then the root group stays hidden, so
- * a half-baked surface is never drawn. See src/render/planet/surface/README.md.
+ * 'full' vs 'lite'. A lite visual is the same world at low fidelity, built from the same seed, palette,
+ * terrain functions and lighting model, so the engine's lite -> full swap (at ~28 px radius) changes
+ * detail, not look:
+ *   rocky — the same bake at 64^2 per face (started lazily, a few per frame, from the first `update`) and
+ *           the same shader, with the cloud shell and atmosphere rim folded into the surface;
+ *   giant — the same analytic shader (octave cap only).
+ * `ready` is true from the start for lite; a lite visual stays hidden for its first few frames while its
+ * shaders compile and its tiny bake runs. A full rocky visual is `ready` once the time-sliced bake, driven
+ * by `prepare(renderer, budgetMs)`, has finished and its shaders are compiled.
+ *
+ * See src/render/planet/surface/README.md for the design.
  */
 import {
   type BufferGeometry,
@@ -39,8 +46,16 @@ import { createClouds } from './clouds';
 import { createRings } from './rings';
 import { SurfaceBaker } from './surface/bake';
 import { GiantSurface } from './surface/GiantSurface';
-import { LiteSurface } from './surface/LiteSurface';
 import { RockySurface } from './surface/RockySurface';
+
+/** Cube-face resolution of the tiny bake behind 'lite' rocky visuals. */
+export const LITE_BAKE_SIZE = 64;
+/** At most this many lite visuals advance their setup per rendered frame (spreads 30 bodies over frames). */
+const LITE_STARTS_PER_FRAME = 3;
+const LITE_STEP_BUDGET_MS = 6;
+
+let liteFrame = -1;
+let liteStarted = 0;
 
 /** What every surface implementation offers the composer. */
 interface SurfaceLike {
@@ -79,15 +94,12 @@ export class PlanetVisual implements IPlanetVisual {
     if (this.look.family === 'giant') {
       this.surface = new GiantSurface(body, this.look, quality, !full);
       this.baked = true;
-    } else if (full) {
-      const size = BAKE_SIZE[quality];
+    } else {
+      const size = full ? BAKE_SIZE[quality] : LITE_BAKE_SIZE;
       this.baker = new SurfaceBaker(this.look, size);
-      this.rocky = new RockySurface(body, this.look, quality, size);
+      this.rocky = new RockySurface(body, this.look, quality, size, !full);
       this.surface = this.rocky;
       this.baked = false;
-    } else {
-      this.surface = new LiteSurface(body, this.look);
-      this.baked = true;
     }
     this.object.add(this.surface.mesh);
     if (full) {
@@ -98,55 +110,55 @@ export class PlanetVisual implements IPlanetVisual {
     for (const part of [this.atmosphere, this.clouds, this.rings])
       if (part) this.object.add(part.object);
     this.object.visible = false;
-    // Lite visuals are ready at once; their program compiles on first draw (see `prewarmPlanetPrograms`).
-    if (!full) this.compile = 'done';
   }
 
   get ready(): boolean {
-    return this.baked && this.compile === 'done';
+    return this.detail === 'lite' || this.settled;
   }
 
-  /** 0..1 bake progress (1 when ready). */
+  /** 0..1 setup progress (bake + shader compilation); 1 when the surface can be drawn. */
   get progress(): number {
-    return this.ready ? 1 : Math.min(0.99, this.baker?.progress ?? 0);
+    if (this.settled) return 1;
+    return Math.min(
+      0.99,
+      (this.baker?.progress ?? 0.5) * 0.95 + (this.compile === 'done' ? 0.05 : 0),
+    );
   }
 
-  /** The baked cube maps (dev tools: coverage statistics, inspection), or null before `ready`. */
+  /** True once the surface can actually be drawn (lite visuals report `ready` at once but draw a few frames later). */
+  get drawable(): boolean {
+    return this.settled;
+  }
+
+  /** The baked cube maps (dev tools: coverage statistics, inspection), or null before they are done. */
   bakedCubes(): { albedo: WebGLCubeRenderTarget; relief: WebGLCubeRenderTarget } | null {
     return this.baker?.result ?? null;
   }
 
-  /** Debug view of the rocky surface: 0 shaded, 1 albedo, 2 normals, 3 height. */
+  /** Debug view of the rocky surface: 0 shaded, 1 albedo, 2 normals, 3 height, 4 shadow, 5 diffuse. */
   setDebug(mode: number): void {
     this.rocky?.setDebug(mode);
   }
 
+  /**
+   * Compile this visual's shader programs without drawing anything (see `prewarmPlanetPrograms`).
+   * Resolves when the surface program (and, for rocky worlds, the bake programs) are ready.
+   */
+  async warm(renderer: WebGLRenderer): Promise<void> {
+    await Promise.all([this.compileSurface(renderer), this.baker?.warm(renderer)]);
+  }
+
   prepare(renderer: WebGLRenderer, budgetMs: number): boolean {
     if (this.ready) return true;
-    if (this.compile === 'idle') {
-      this.compile = 'pending';
-      const scene = new Scene();
-      // A proxy mesh (shared geometry/material) so the compile does not depend on where the real one lives.
-      scene.add(new Mesh(this.surface.mesh.geometry, this.surface.mesh.material));
-      const done = (): void => {
-        this.compile = 'done';
-      };
-      renderer.compileAsync(scene, new PerspectiveCamera()).then(done, done);
-    }
-    if (!this.baked && this.baker?.step(renderer, budgetMs)) {
-      const cubes = this.baker.result;
-      if (cubes && this.rocky) {
-        this.rocky.setBaked(cubes.albedo, cubes.relief);
-        this.baked = true;
-      }
-    }
+    this.advance(renderer, budgetMs);
     return this.ready;
   }
 
   update(frame: VisualFrame, u: PlanetUniforms): void {
+    if (this.detail === 'lite' && !this.settled) this.advanceLite(frame.renderer);
     this.object.position.copy(u.positionKm);
     this.object.quaternion.copy(u.orientation);
-    this.object.visible = this.ready && u.intensity > 0.001;
+    this.object.visible = this.settled && u.intensity > 0.001;
     if (!this.object.visible) return;
     this.surface.update(frame, u);
     this.atmosphere?.update(frame, u);
@@ -161,4 +173,67 @@ export class PlanetVisual implements IPlanetVisual {
     this.clouds?.dispose();
     this.rings?.dispose();
   }
+
+  // ───────────────────────────────────────────────────────────── setup
+
+  /** Bake finished and shader compiled: the surface can be drawn. */
+  private get settled(): boolean {
+    return this.baked && this.compile === 'done';
+  }
+
+  private advanceLite(renderer: WebGLRenderer): void {
+    const frameNo = renderer.info.render.frame;
+    if (frameNo !== liteFrame) {
+      liteFrame = frameNo;
+      liteStarted = 0;
+    }
+    if (liteStarted >= LITE_STARTS_PER_FRAME) return;
+    liteStarted++;
+    this.advance(renderer, LITE_STEP_BUDGET_MS);
+  }
+
+  private advance(renderer: WebGLRenderer, budgetMs: number): void {
+    if (this.compile === 'idle') void this.compileSurface(renderer);
+    if (!this.baked && this.baker?.step(renderer, budgetMs)) {
+      const cubes = this.baker.result;
+      if (cubes && this.rocky) {
+        this.rocky.setBaked(cubes.albedo, cubes.relief);
+        this.baked = true;
+      }
+    }
+  }
+
+  /** Compile the surface program through a proxy mesh (shared geometry/material), so it never depends on scene placement. */
+  private compileSurface(renderer: WebGLRenderer): Promise<void> {
+    if (this.compile === 'done') return Promise.resolve();
+    this.compile = 'pending';
+    const scene = new Scene();
+    scene.add(new Mesh(this.surface.mesh.geometry, this.surface.mesh.material));
+    const done = (): void => {
+      this.compile = 'done';
+    };
+    return renderer.compileAsync(scene, new PerspectiveCamera()).then(done, done);
+  }
+}
+
+/**
+ * Compile every planet shader program up front (run it at boot, like the engine's other pre-warms) so the
+ * first arrival at any world never stalls on compilation. Pass one rocky and one giant sample body (programs
+ * are shared by all bodies of a family); keep the returned handle for the lifetime of the renderer — three.js
+ * frees a program when its last material is disposed — and call `release()` on shutdown.
+ */
+export async function prewarmPlanetPrograms(
+  renderer: WebGLRenderer,
+  samples: readonly { body: BodyBase; system: StarSystem }[],
+  quality: Quality,
+): Promise<{ release(): void }> {
+  const visuals = samples.map(
+    (s) => new PlanetVisual(s.body, { system: s.system }, quality, 'lite'),
+  );
+  await Promise.all(visuals.map((v) => v.warm(renderer)));
+  return {
+    release(): void {
+      for (const v of visuals) v.dispose();
+    },
+  };
 }

@@ -1,10 +1,20 @@
 /** Shared React hooks and the layout context. */
-import { createContext, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import {
+  createContext,
+  type RefObject,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from 'react';
 import type { SelectionRef } from '../core/types';
+import { engineCommands } from '../state/bridge';
 import { useStore } from '../state/store';
 import { getUniverse } from '../universe';
 import type { Universe } from '../universe/contracts';
 import { type ObjectModel, resolveObject } from './lib/model';
+import { insetsFromBoxes, readCoverBoxes } from './lib/viewInsets';
 
 /** The universe for the current galaxy seed (memoised by the facade). */
 export function useUniverse(): Universe {
@@ -116,4 +126,49 @@ export function useReducedMotion(): boolean {
   const os = useSyncExternalStore(subscribeReduce, osReducesMotion, () => false);
   const setting = useStore((s) => s.settings.reducedMotion);
   return os || setting;
+}
+
+/**
+ * Keep the engine informed of the part of the view the UI covers (top bar, desktop plate, phone
+ * sheet), so focused objects are framed in the visible remainder. Re-measures after every layout
+ * change of those elements (ResizeObserver, coalesced to one call per frame) and whenever `deps`
+ * change — they should name whatever can mount, unmount or move the chrome. `ready` is part of the
+ * key on purpose: the engine registers its commands just before it reports ready, so the first
+ * measurement made at mount time would otherwise be lost.
+ */
+export function useViewInsets(
+  root: RefObject<HTMLElement | null>,
+  compact: boolean,
+  deps: readonly unknown[],
+): void {
+  useEffect(() => {
+    const layout = root.current?.querySelector<HTMLElement>('.sd-layout');
+    if (!layout) return;
+    let frame = 0;
+    const observed = new Set<Element>();
+    const observer =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => schedule());
+
+    const measure = () => {
+      frame = 0;
+      const boxes = readCoverBoxes(layout);
+      // Observe whatever is on screen now (elements come and go with selection / photo mode).
+      for (const el of [layout, ...layout.querySelectorAll('.sd-topbar, aside.sd-info')]) {
+        if (!observed.has(el)) {
+          observed.add(el);
+          observer?.observe(el);
+        }
+      }
+      engineCommands().setViewInsets(insetsFromBoxes(boxes, compact));
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+
+    measure();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
+  }, [root, compact, ...deps]);
 }

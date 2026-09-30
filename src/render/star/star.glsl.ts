@@ -50,6 +50,8 @@ uniform float uSpotAnywhere; // 0: spots confined to a sunspot belt, 1: anywhere
 uniform float uLimbSoft;     // fuzzy limb of extended atmospheres 0..0.5
 uniform vec4 uFlare;         // xyz body-fixed direction, w envelope
 uniform float uQuality;      // 0 low .. 3 ultra
+uniform float uSaturation;   // extra chroma applied to the shaded disc
+uniform mat4 projectionMatrix; // (three declares it for the vertex stage only)
 
 in vec3 vViewPos;
 flat in vec3 vCentre;
@@ -105,31 +107,50 @@ void main() {
   vec3 pb = uBodyFromView * n;
 
   // Limb darkening from the Eddington grey atmosphere: T^4 = 3/4 Teff^4 (tau + 2/3) with tau = mu.
-  float tLimb = uTeff * pow(0.75 * (mu + 0.6667), 0.25);
+  float tLimb = uTeff * pow(0.75 * (mu + 0.6667), 0.36);
   float dT = 0.0;
 
-  // Convection: granules (Worley cells + dark lanes) and the larger supergranular mottling.
+  // Convection: granules (Worley cells with dark lanes) on a domain-warped surface so the cells are
+  // irregular; a second, finer octave appears as the coarse cells grow large on screen; plus fine
+  // turbulence and the larger supergranular mottling.
   if (uConvection > 0.0) {
     float cellPx = uDiscPx / uGranScale;
     float lod = smoothstep(1.5, 5.0, cellPx);
     float towardLimb = 0.35 + 0.65 * mu;
+    vec3 pw = pb * uGranScale + uSeed3;
     if (lod > 0.0) {
-      vec3 g = granules(pb * uGranScale + uSeed3, uTime);
-      float lane = smoothstep(0.0, 0.2, g.y - g.x);
+      vec3 warp = vec3(snoise(pw * 0.5 + 3.1), snoise(pw * 0.5 + 7.7), snoise(pw * 0.5 + 11.3));
+      vec3 g = granules(pw + 0.55 * warp, uTime);
+      float lw = 0.11 + 0.06 * snoise(pw * 0.9 + 21.0);          // lane width varies
+      float lane = smoothstep(0.0, lw, g.y - g.x);
+      float depth = 0.8 + 0.45 * snoise(pw * 1.1 + 5.0);         // ...and so does its depth
+      float dome = 1.0 - smoothstep(0.0, 0.6, g.x);
       float boil = sin(uTime * 0.31 + 6.2831853 * g.z);
-      float dg = 0.075 * (lane - 0.6) + 0.040 * (0.36 - g.x) + 0.012 * boil * lane;
+      float dg = -0.075 * (1.0 - lane) * depth + 0.060 * (dome - 0.35) + 0.035 * (g.z - 0.5) + 0.018 * boil * dome;
       dT += uConvection * lod * towardLimb * dg;
+      // Finer octave: only worth its cost once the coarse cells are big enough to want detail.
+      float lod2 = uQuality > 0.5 ? smoothstep(14.0, 40.0, cellPx) : 0.0;
+      if (lod2 > 0.0) {
+        vec3 g2 = granules(pw * 3.3 + 17.0 + 0.6 * warp, uTime * 1.3);
+        float lane2 = smoothstep(0.0, lw, g2.y - g2.x);
+        float dome2 = 1.0 - smoothstep(0.0, 0.6, g2.x);
+        dT += uConvection * lod2 * towardLimb * (-0.04 * (1.0 - lane2) * depth + 0.03 * (dome2 - 0.35) + 0.02 * (g2.z - 0.5));
+      }
+      if (uQuality > 1.5) {
+        float fine = snoise(vec4(pw * 2.7, uTime * 0.05)) + 0.5 * snoise(vec4(pw * 5.6, uTime * 0.08));
+        dT += uConvection * smoothstep(3.0, 9.0, cellPx) * towardLimb * 0.011 * fine;
+      }
     }
     float lodS = smoothstep(1.5, 5.0, uDiscPx / (uGranScale * 0.2));
     float sg = snoise(vec4(pb * (uGranScale * 0.2) + uSeed3, uTime * 0.02));
-    dT += uConvection * lodS * 0.014 * sg;
+    dT += uConvection * lodS * 0.016 * sg;
   }
 
   // Starspots (umbra, penumbra) and faculae. Cooler = darker AND redder through the Planck ratio.
   if (uActivity > 0.02) {
     float lat = abs(pb.y);
     float belt = mix(smoothstep(0.66, 0.30, lat), 1.0, uSpotAnywhere);
-    float field = snoise(vec4(pb * 1.8 + uSeed3 * 1.7, uTime * 0.0035)) * belt;
+    float field = (snoise(vec4(pb * 1.8 + uSeed3 * 1.7, uTime * 0.0035)) + 0.22 * snoise(vec3(pb * 5.3 + uSeed3))) * belt;
     float e = field - (0.78 - 0.55 * uActivity);
     if (e > -0.30) {
       float umbra = smoothstep(0.05, 0.16, e);
@@ -138,11 +159,14 @@ void main() {
         pen *= 0.8 + 0.3 * snoise(vec3(pb * 30.0 + uSeed3));
       }
       float fac = smoothstep(-0.30, -0.02, e) * (1.0 - smoothstep(0.0, 0.08, e));
-      dT += -0.10 * pen - 0.16 * umbra + 0.045 * fac * pow(1.0 - mu, 1.3) * uActivity;
+      dT += -0.085 * pen - 0.13 * umbra + 0.045 * fac * pow(1.0 - mu, 1.3) * uActivity;
     }
   }
 
   vec3 rgb = uColor * uBrightness * planckRatio(tLimb * (1.0 + dT), uTeff);
+  // ACES desaturates anything bright; richer chroma keeps a resolved sun warm rather than white.
+  float lum = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+  rgb = max(mix(vec3(lum), rgb, uSaturation), 0.0);
 
   // Flare: a compact white-blue kernel on the surface.
   if (uFlare.w > 0.001) {
@@ -213,12 +237,12 @@ void main() {
 
   // K-corona: bright, steep near the limb, shallower far out; streamers on top.
   float fall = pow(1.0 / x, uFall);
-  float sn = snoise(vec4(dir * 1.9 + uSeed, x * 0.16, uSeed * 0.5 + uTime * 0.012));
+  float sn = snoise(vec4(dir * 2.7 + uSeed, x * 0.11, uSeed * 0.5 + uTime * 0.012));
   float belt = pow(abs(dot(dir, uEquator)), 1.6);
-  float st = clamp(0.5 + 0.55 * sn + 0.35 * belt - 0.1, 0.0, 1.0);
-  float streamers = mix(1.0, 0.25 + 2.1 * st * st, uStreamer);
+  float st = clamp(0.5 + 0.6 * sn + 0.3 * belt - 0.12, 0.0, 1.0);
+  float streamers = mix(1.0, 0.08 + 3.4 * st * st * st, uStreamer);
   float corona = uGain * fall * streamers;
-  corona += uHaloGain * pow(1.0 / x, 1.35);
+  corona += uHaloGain * pow(1.0 / x, 2.4);
 
   vec3 tint = mix(uColor, vec3(1.0), 0.55);
   vec3 rgb = tint * (uBrightness * corona);
@@ -243,7 +267,7 @@ void main() {
       float seed = fi * 11.7 + cyc * 5.93 + uSeed;
       float ang = TAU * hash11(seed);
       float span = 0.05 + 0.10 * hash11(seed + 1.7);
-      float height = (0.10 + 0.30 * hash11(seed + 3.1)) * (0.45 + 0.75 * uProm);
+      float height = (0.14 + 0.42 * hash11(seed + 3.1)) * (0.5 + 0.7 * uProm);
       float env = smoothstep(0.0, 0.2, u) * (1.0 - smoothstep(0.5, 1.0, u));
       float hgt = height * (0.3 + 0.7 * smoothstep(0.0, 0.55, u));
       float a = abs(wrapAngle(phi - ang)) / span;
@@ -259,7 +283,7 @@ void main() {
       }
     }
     float lodP = smoothstep(20.0, 60.0, px);
-    rgb += uHotColor * (uBrightness * 0.42 * uProm * (1.0 + 1.5 * uFlareBoost) * acc * lodP);
+    rgb += uHotColor * (uBrightness * 0.9 * (0.3 + 0.7 * uProm) * (1.0 + 1.5 * uFlareBoost) * acc * lodP);
   }
 
   // Flares light the whole limb region a little.

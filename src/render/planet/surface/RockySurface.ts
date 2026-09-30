@@ -42,6 +42,8 @@ const DETAIL: Readonly<Record<RockyStyle, { slope: number; albedo: number }>> = 
   dwarf: { slope: 0.07, albedo: 0.16 },
 };
 
+const LITE_SEGMENTS = 48;
+
 const fragmentShader = `${common}\n${noise}\n${lightingGlsl}\n${rockyFragment}`;
 
 export class RockySurface {
@@ -51,11 +53,12 @@ export class RockySurface {
   private readonly uniforms: Record<string, Uniform>;
   private readonly sunRadiance = new Vector3();
 
-  constructor(body: BodyBase, look: RockyLook, quality: Quality, bakeSize: number) {
+  constructor(body: BodyBase, look: RockyLook, quality: Quality, bakeSize: number, lite = false) {
     this.body = body;
     const ocean = look.ocean;
     const ring = body.rings;
     const detail = DETAIL[look.style];
+    const hazeColor = body.appearance.hazeColor;
     this.uniforms = {
       uAlbedoTex: new Uniform(null),
       uReliefTex: new Uniform(null),
@@ -83,7 +86,9 @@ export class RockySurface {
       uSeed: new Uniform(new Vector3(look.seed[0], look.seed[1], look.seed[2])),
       uRelief: new Uniform(look.terrain.relief),
       uBakeTexel: new Uniform(Math.PI / 2 / bakeSize),
-      uDetailOctaves: new Uniform(DETAIL_OCTAVES[quality]),
+      uDetailOctaves: new Uniform(
+        lite ? Math.min(2, DETAIL_OCTAVES[quality]) : DETAIL_OCTAVES[quality],
+      ),
       uDetailSlope: new Uniform(detail.slope),
       uDetailAlbedo: new Uniform(detail.albedo),
       uOceanDeep: new Uniform(ocean ? new Color(...ocean.deep) : new Color()),
@@ -99,10 +104,15 @@ export class RockySurface {
       uAirless: new Uniform(look.airlessBrdf ? 1 : 0),
       uRough: new Uniform(look.roughness),
       uDebug: new Uniform(0),
+      uLite: new Uniform(lite ? 1 : 0),
+      uCloudCov: new Uniform(look.cloudCoverage),
+      uCloudColor: new Uniform(new Color(...body.appearance.cloudColor)),
+      uHaze: new Uniform(hazeColor ? new Color(...hazeColor) : new Color()),
+      uRim: new Uniform(hazeColor ? 0.5 * Math.min(1, 0.4 + look.optics.pressureAtm) : 0),
     };
     void MAX_OCCLUDERS;
 
-    const seg = SURFACE_SEGMENTS[quality];
+    const seg = lite ? LITE_SEGMENTS : SURFACE_SEGMENTS[quality];
     this.mesh = new Mesh(
       new SphereGeometry(1, seg, seg / 2),
       new ShaderMaterial({
@@ -120,7 +130,7 @@ export class RockySurface {
     this.mesh.visible = false;
   }
 
-  /** Attach the baked cubes and reveal the surface. */
+  /** Attach the baked cubes and reveal the surface (hidden until then). */
   setBaked(albedo: WebGLCubeRenderTarget, relief: WebGLCubeRenderTarget): void {
     const a = this.uniforms.uAlbedoTex;
     const r = this.uniforms.uReliefTex;

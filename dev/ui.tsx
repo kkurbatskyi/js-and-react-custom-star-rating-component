@@ -14,6 +14,7 @@
  *   ?toast=1                                        push sample toasts
  *   ?dist=1.5e8                                     camera distance, km (scale ruler)
  *   ?sheet=peek|half|full                           phone sheet state
+ *   ?insets=1                                       outline the free area reported by setViewInsets
  *   ?panel=0                                        hide this page's own controls
  */
 import { createRoot } from 'react-dom/client';
@@ -153,7 +154,30 @@ Object.assign(appRoot.style, {
 host.appendChild(appRoot);
 
 // ── mock engine ─────────────────────────────────────────────────────────────────────────────
+// `?insets=1` outlines the free rectangle the overlay reports to the engine (centre cross included).
+let viewInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+const freeRect = document.createElement('div');
+Object.assign(freeRect.style, {
+  position: 'absolute',
+  zIndex: '0',
+  pointerEvents: 'none',
+  border: '1px dashed rgb(141 182 242 / 0.7)',
+  display: flag('insets') ? 'block' : 'none',
+  background:
+    'linear-gradient(rgb(141 182 242 / .5), rgb(141 182 242 / .5)) center / 1px 24px no-repeat, linear-gradient(rgb(141 182 242 / .5), rgb(141 182 242 / .5)) center / 24px 1px no-repeat',
+});
+host.appendChild(freeRect);
+
 registerEngineCommands({
+  setViewInsets: (insets) => {
+    viewInsets = insets;
+    Object.assign(freeRect.style, {
+      left: `${insets.left}px`,
+      top: `${insets.top}px`,
+      right: `${insets.right}px`,
+      bottom: `${insets.bottom}px`,
+    });
+  },
   zoomBy: (f) => store.getState().pushToast({ text: `zoomBy(${f})`, tone: 'info' }),
   resetView: () => store.getState().pushToast({ text: 'resetView()', tone: 'info' }),
   capture: () =>
@@ -378,6 +402,9 @@ window.addEventListener('keydown', (e) => {
 // Handy for `shot.mjs --eval`: type into the palette, poke the store.
 window.__UI__ = {
   store,
+  get insets() {
+    return viewInsets;
+  },
   setQuery(q: string) {
     const el = document.querySelector<HTMLInputElement>('.sd-palette__field input');
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;

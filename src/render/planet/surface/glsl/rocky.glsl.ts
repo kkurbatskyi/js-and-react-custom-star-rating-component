@@ -54,6 +54,11 @@ uniform float uWrap;
 uniform float uAirless;
 uniform float uRough;
 uniform int uDebug;
+uniform float uLite;        // 1: fold the cloud shell and atmosphere rim into the surface
+uniform float uCloudCov;
+uniform vec3 uCloudColor;
+uniform vec3 uHaze;
+uniform float uRim;
 
 in vec3 vDir;
 out vec4 fragColor;
@@ -96,7 +101,8 @@ float horizonShadow(vec3 p, vec3 L, float lodPx) {
 
 void main() {
   vec3 p = normalize(vDir);
-  float px = max(length(dFdx(p)), length(dFdy(p)));   // one pixel on the unit sphere, in radians
+  // One pixel on the unit sphere, in radians (clamped: helper invocations at the silhouette extrapolate wildly).
+  float px = min(max(length(dFdx(p)), length(dFdy(p))), 0.5);
   vec3 posB = p * uRadii;                              // km, body frame
   vec3 nGeo = normalize(p / uRadii);
   vec3 V = normalize(uCamB - posB);
@@ -147,7 +153,11 @@ void main() {
   vec3 sunT = vec3(1.0);
   if (uAmbient > 0.0) sunT = exp(-uSunTau * airmass(mu0));
   float shadow = 1.0;
-  if (mu0 > -0.3 && ocean < 0.99) shadow = horizonShadow(p, L, max(0.0, log2(px / uBakeTexel)));
+  float lodPx = clamp(log2(px / uBakeTexel), 0.0, 10.0);
+  // Terrain shadows are sub-pixel features once a texel spans several pixels: fade them out with distance
+  // instead of letting a handful of coarse-mip pixels flicker black near the terminator.
+  float shadowFade = 1.0 - smoothstep(0.5, 2.5, lodPx);
+  if (shadowFade > 0.0 && mu0 > -0.3 && ocean < 0.99) shadow = mix(1.0, horizonShadow(p, L, lodPx), shadowFade);
   float eclipse = 1.0;
   for (int i = 0; i < 4; i++) {
     if (i >= uOccCount) break;
@@ -216,13 +226,26 @@ void main() {
     col = mix(land, oceanCol, ocean);
   }
 
+  // ---- 'lite' visuals have no separate cloud/atmosphere shells: fold a cheap version of both into the surface
+  float cloudCover = 0.0;
+  if (uLite > 0.5) {
+    if (uCloudCov > 0.001) {
+      vec3 cq = p * 3.2 + uSeed.yxz + vec3(uTime * 0.0008, 0.0, 0.0);
+      float cn = 0.5 + 0.5 * fbm(cq + 0.6 * fbm(cq * 2.0, 2), 4);
+      cloudCover = uCloudCov >= 0.999 ? 0.85 + 0.15 * cn : 0.8 * smoothstep(1.0 - uCloudCov, 1.4 - uCloudCov, cn);
+      vec3 cl = uCloudColor * (sunLight * saturate((mu0 + 0.25) / 1.25) + skyLight);
+      col = mix(col, cl, cloudCover);
+    }
+    col += uHaze * uSunRadiance * (pow(1.0 - saturate(dot(nGeo, V)), 3.2) * uRim * skyDay);
+  }
+
   // ---- emissives: lava glow and city lights (only where it is dark)
   if (uEmissiveKind == 2) {
-    float e = emis;
-    col += lavaColor(e) * (2.6 * uEmissive * pow(e, 2.2));
+    // emis holds radiant energy E = e^2.2 (see bakeAlbedo): intensity is linear in E, the colour ramp uses e.
+    col += lavaColor(pow(emis, 0.4545)) * (2.6 * uEmissive * emis * (1.0 - cloudCover));
   } else if (uEmissiveKind == 1) {
     float night = 1.0 - smoothstep(-0.06, 0.05, mu0);
-    col += vec3(1.0, 0.74, 0.42) * (2.6 * uEmissive * emis * night);
+    col += vec3(1.0, 0.74, 0.42) * (2.6 * uEmissive * emis * night * (1.0 - cloudCover));
   }
 
   if (uDebug == 1) col = albedo;

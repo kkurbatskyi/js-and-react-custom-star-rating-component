@@ -18,8 +18,8 @@ galaxy.dispose();
 ```
 
 Beyond `IGalaxyVisual`: `look` (a `GalaxyLook`, read every frame — bind a GUI to it),
-`rebuildParticles()` (after changing colour temperatures), `exposureHint(cameraLy)`, and the dev
-helpers `validateMap(frame)` / `probeVolume(frame, u, v)`.
+`rebuildParticles()` (after changing colour temperatures), `exposureHint(cameraLy)`,
+`setTemporal(on)`, and the dev helpers `validateMap(frame)` / `probeVolume(frame, u, v)`.
 
 ## Technique
 
@@ -38,12 +38,16 @@ white disk → blue arms, radial gradient; diffuse Hα on the star-forming ridge
 L += T·j·(1 − e^(−α dt))/α. Steps adapt to what the ray crosses —
 `dt = min(kY(|y| + h_d)/|d_y|, kR(|p| + r₀), kT·t + dt_min)` — fine where a ray crosses the
 midplane, near the centre, and geometric from the camera when inside the disk; the second half of
-the budget stretches to reach the exit. Jittered starts (interleaved gradient noise × golden
-ratio per frame) are accumulated by a resolve pass that reprojects the history with the
-emission-weighted distance and clamps it to the 3×3 neighbourhood. The composite upsamples with a
-**dust-guided joint bilateral filter**: the march also writes (MRT) a deterministic optical-depth
-guide, the full-resolution pass integrates the same guide along its own ray and weights the 2×2
-low-res taps by τ similarity, so lanes stay sharp at ¼ of the pixels.
+the budget stretches to reach the exit. Starts are jittered per pixel with interleaved gradient
+noise (+ golden ratio per frame). **A single frame is clean on its own**: the resolve pass first
+denoises the frame with a 3×3 tent that is cross-bilateral on dust transmittance e^(−τ) (IGN
+spreads the nine taps over the whole jitter range; comparing transmittance rather than τ treats
+opaque-vs-opaque as no edge, so rift interiors smooth while lane edges survive). Temporal
+accumulation (history reprojected with the emission-weighted distance, clamped to the 3×3
+neighbourhood) only refines further — captures after 3 frames are already smooth. The march writes
+(MRT) that deterministic optical-depth guide; the full-resolution composite integrates the same
+guide along its own ray and weights the 2×2 low-res taps by transmittance similarity
+(**dust-guided joint bilateral upsampling**), so lanes stay sharp at ¼ of the pixels.
 
 **Dust.** The model's dust (lanes half a σ inside each arm ridge) is clumped log-normally by the
 filament noise, exp(k n − k²s²/2) — turbulent-ISM statistics that keep the mean but open gaps, so
@@ -73,10 +77,10 @@ foreground, and it keeps the high-latitude sky dark (band/pole contrast ~5× →
 
 | | particles | map | volume scale | steps | LOS dust samples | guided upsample |
 |---|---|---|---|---|---|---|
-| low | 80k | 1024² | 0.4 | 28 | 4 | off |
-| medium | 150k | 1024² | 0.5 (¼ px) | 40 | 6 | on |
-| high | 300k | 2048² | 0.7 (½ px) | 52 | 8 | on |
-| ultra | 500k | 2048² | 0.7 | 64 | 8 | on |
+| low | 80k | 1024² | 0.4 | 32 | 4 | off |
+| medium | 150k | 1024² | 0.5 (¼ px) | 48 | 6 | on |
+| high | 300k | 2048² | 0.7 (½ px) | 60 | 8 | on |
+| ultra | 500k | 2048² | 0.7 | 72 | 8 | on |
 
 Draw calls: 3 offscreen + 2 in the scene. GPU memory (medium): map 11 MB, volume targets
 3 × RGBA16F at ¼ px, noise 256 KB, particles 150k × 32 B. CPU: construction ≈ 200 ms (medium,
@@ -92,7 +96,8 @@ camera position (log space; 1 far away). The dev page applies it; the engine may
 ## Dev page — `dev/galaxy.html`
 
 `?view=overview|faceon|edgeon|above-home|inside-core|inside-plane`, `?seed=`, `?near=`,
-`?look=key:value,…` (A/B without code edits), `?validate=1` (GPU bake vs CPU model →
+`?look=key:value,…` (A/B without code edits), `?temporal=0&settle=0` (a single, unaccumulated
+frame — how the app looks right after a cut), `?validate=1` (GPU bake vs CPU model →
 `window.__GALAXY_CHECK__`, max error ≈ 2e-4), `?probe=u,v;…` (HDR volume radiance →
 `window.__GALAXY_PROBE__`), plus the harness parameters. lil-gui exposes the whole `GalaxyLook`.
 
@@ -101,7 +106,10 @@ camera position (log space; 1 far away). The dev page applies it; the engine may
 - Arms follow the model exactly (the catalogue depends on it); tightly wound 4-arm seeds look more
   M101 than M51. No spurs/feathers between arms yet (a visual-only dust term would do).
 - The composite needs ~12 map taps per pixel on medium+ (guided upsampling); `low` uses bilinear.
-- Temporal accumulation ghosts slightly under fast rotation (neighbourhood clamping limits it).
+- Temporal accumulation ghosts slightly under fast rotation (neighbourhood clamping limits it);
+  `setTemporal(false)` gives the denoised single frame only.
+- The app's `nearFadeLy` is 1200 ly (dev page default 2500): the volume's unresolved light fades
+  over 1.6 × that, so inside-disk skies carry a little more foreground glow in the app.
 - Resolved HII regions near the camera become dim dots, not nebulae (a noise-textured nebula
   sprite would be the next step).
 - On portrait phones the overview needs a wider framing (camera distance is the engine's call).

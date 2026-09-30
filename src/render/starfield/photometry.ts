@@ -28,27 +28,37 @@ export const SPRITE = {
   peak0: 4.0,
   /** Peak grows as flux^peakExponent. */
   peakExponent: 0.8,
-  /** Upper clamp of the peak radiance (HDR; bloom does the rest). */
-  peakMax: 48,
+  /**
+   * Upper clamp of the core's peak radiance. The bloom pass turns every HDR unit above 1 into a
+   * wide glow, so a sprite's total energy (peak x sigma^2) must stay modest or a bright star
+   * becomes a fog ball: past this cap only the glare (halo, spikes) keeps growing, slowly.
+   */
+  peakMax: 20,
   /** Core Gaussian sigma: floor and growth with log10(1 + peak), CSS px. */
   sigmaMin: 0.8,
   sigmaGrow: 1.6,
-  sigmaMax: 5,
-  /** Halo (Plummer) radius: base + grow * log10(1 + peak)^2, CSS px. */
-  haloBase: 2.5,
-  haloGrow: 14,
-  haloMax: 60,
-  /** Halo peak relative to the core peak. */
+  sigmaMax: 3.6,
+  /** Halo (Plummer) radius: (base + grow * log10(1 + peak)^2) * glare, CSS px. */
+  haloBase: 2.2,
+  haloGrow: 9,
+  haloMax: 30,
+  /** Halo peak relative to the core peak, and its absolute cap. */
   haloGain: 0.05,
-  /** Spike amplitude relative to the core peak, ramping in between two peak levels. */
+  haloCap: 0.4,
+  /** Spike amplitude relative to the core peak (ramping in between two peak levels) and its cap. */
   spikeGain: 0.22,
   spikeKneeLo: 0.35,
   spikeKneeHi: 2.5,
+  spikeCap: 2.5,
   /** Spike falloff length scale and length cap, CSS px. */
   spikeScale: 3.5,
-  spikeMax: 160,
+  spikeMax: 120,
+  /** Glare (halo radius, spike length) grows by this factor per decade of flux beyond the peak cap... */
+  glareGrow: 0.12,
+  /** ...for at most this many decades. */
+  glareDecades: 6,
   /** Radiance below which a sprite component is considered invisible (extent cut-offs). */
-  visible: 0.003,
+  visible: 0.006,
   /** Reference pixels-per-radian (1080 px tall, 50 deg fov) for `resolutionScale`. */
   referencePpr: 1158,
 } as const;
@@ -121,16 +131,19 @@ const smooth = (a: number, b: number, x: number): number => {
  */
 export function spriteFromFlux(flux: number, resScale: number, out: PointSource): PointSource {
   const S = SPRITE;
-  const peak = Math.min(S.peakMax, S.peak0 * flux ** S.peakExponent);
+  const peakRaw = S.peak0 * flux ** S.peakExponent;
+  const peak = Math.min(S.peakMax, peakRaw);
   const lp = Math.log10(1 + peak);
+  // Past the peak cap the core stops growing but the glare keeps widening, a little per decade.
+  const decades = Math.min(S.glareDecades, Math.max(0, Math.log10(Math.max(peakRaw, 1e-30) / S.peakMax)));
+  const glare = 1 + S.glareGrow * decades;
   const sigma = Math.min(S.sigmaMax, S.sigmaMin + S.sigmaGrow * lp ** 1.5) * resScale;
-  const halo = Math.min(S.haloMax, S.haloBase + S.haloGrow * lp * lp) * resScale;
-  const haloAbs = S.haloGain * peak;
-  const spikeGain = S.spikeGain * smooth(S.spikeKneeLo, S.spikeKneeHi, peak);
-  const spikeAbs = spikeGain * peak;
+  const halo = Math.min(S.haloMax, (S.haloBase + S.haloGrow * lp * lp) * glare) * resScale;
+  const haloAbs = Math.min(S.haloGain * peak, S.haloCap);
+  const spikeAbs = Math.min(S.spikeGain * smooth(S.spikeKneeLo, S.spikeKneeHi, peak) * peak, S.spikeCap);
   const spike =
     spikeAbs > S.visible
-      ? Math.min(S.spikeMax, S.spikeScale * (Math.sqrt(spikeAbs / S.visible) - 1)) * resScale
+      ? Math.min(S.spikeMax, S.spikeScale * (Math.sqrt(spikeAbs / S.visible) - 1) * glare) * resScale
       : 0;
   // Extent: where each component drops below the visibility threshold.
   const haloExtent =
@@ -138,9 +151,9 @@ export function spriteFromFlux(flux: number, resScale: number, out: PointSource)
   out.peakHdr = peak;
   out.sigmaPx = sigma;
   out.haloPx = halo;
-  out.haloGain = S.haloGain;
+  out.haloGain = peak > 0 ? haloAbs / peak : 0;
   out.spikePx = spike;
-  out.spikeGain = spikeGain;
+  out.spikeGain = peak > 0 ? spikeAbs / peak : 0;
   out.radiusPx = Math.max(4 * sigma, Math.min(haloExtent, 4 * S.haloMax * resScale), spike) + 2;
   return out;
 }
@@ -164,23 +177,27 @@ export function pointSource(
 
 /**
  * GLSL twin of `spriteFromFlux` + the sprite profile. Include once per shader (no dependencies).
- *   starSpriteParams(flux, resScale, ...)  -> peak, sigma, halo radius, spike length, spike gain, extent
+ *   starSpriteParams(flux, resScale, ...)  -> peak, sigma, halo radius, halo gain, spike length, spike gain, extent
  *   starPsf(p, sigma, haloR, haloGain, spikeLen, spikeGain, extent) -> profile, 1 at the centre
  * `p` is the offset from the star centre in CSS px (screen axes, y up).
  */
 export const spriteGlsl = /* glsl */ `
 // ---- sidereal/starfield/sprite (twin of photometry.ts) ------------------------------------
 void starSpriteParams(float flux, float resScale, out float peak, out float sigma, out float haloR,
-                      out float spikeLen, out float spikeGain, out float extent) {
-  peak = min(${SPRITE.peakMax.toFixed(3)}, ${SPRITE.peak0.toFixed(3)} * pow(max(flux, 1e-12), ${SPRITE.peakExponent.toFixed(3)}));
+                      out float haloGain, out float spikeLen, out float spikeGain, out float extent) {
+  float peakRaw = ${SPRITE.peak0.toFixed(3)} * pow(max(flux, 1e-12), ${SPRITE.peakExponent.toFixed(3)});
+  peak = min(${SPRITE.peakMax.toFixed(3)}, peakRaw);
   float lp = log2(1.0 + peak) * 0.30102999566;
+  float decades = clamp(log2(max(peakRaw, 1e-30) / ${SPRITE.peakMax.toFixed(3)}) * 0.30102999566, 0.0, ${SPRITE.glareDecades.toFixed(1)});
+  float glare = 1.0 + ${SPRITE.glareGrow.toFixed(3)} * decades;
   sigma = min(${SPRITE.sigmaMax.toFixed(3)}, ${SPRITE.sigmaMin.toFixed(3)} + ${SPRITE.sigmaGrow.toFixed(3)} * pow(lp, 1.5)) * resScale;
-  haloR = min(${SPRITE.haloMax.toFixed(3)}, ${SPRITE.haloBase.toFixed(3)} + ${SPRITE.haloGrow.toFixed(3)} * lp * lp) * resScale;
-  float haloAbs = ${SPRITE.haloGain.toFixed(4)} * peak;
-  spikeGain = ${SPRITE.spikeGain.toFixed(4)} * smoothstep(${SPRITE.spikeKneeLo.toFixed(3)}, ${SPRITE.spikeKneeHi.toFixed(3)}, peak);
-  float spikeAbs = spikeGain * peak;
+  haloR = min(${SPRITE.haloMax.toFixed(3)}, (${SPRITE.haloBase.toFixed(3)} + ${SPRITE.haloGrow.toFixed(3)} * lp * lp) * glare) * resScale;
+  float haloAbs = min(${SPRITE.haloGain.toFixed(4)} * peak, ${SPRITE.haloCap.toFixed(4)});
+  float spikeAbs = min(${SPRITE.spikeGain.toFixed(4)} * smoothstep(${SPRITE.spikeKneeLo.toFixed(3)}, ${SPRITE.spikeKneeHi.toFixed(3)}, peak) * peak, ${SPRITE.spikeCap.toFixed(3)});
+  haloGain = peak > 0.0 ? haloAbs / peak : 0.0;
+  spikeGain = peak > 0.0 ? spikeAbs / peak : 0.0;
   spikeLen = spikeAbs > ${SPRITE.visible.toFixed(4)}
-    ? min(${SPRITE.spikeMax.toFixed(3)}, ${SPRITE.spikeScale.toFixed(3)} * (sqrt(spikeAbs / ${SPRITE.visible.toFixed(4)}) - 1.0)) * resScale
+    ? min(${SPRITE.spikeMax.toFixed(3)}, ${SPRITE.spikeScale.toFixed(3)} * (sqrt(spikeAbs / ${SPRITE.visible.toFixed(4)}) - 1.0) * glare) * resScale
     : 0.0;
   float haloExtent = haloAbs > ${SPRITE.visible.toFixed(4)}
     ? haloR * sqrt(pow(haloAbs / ${SPRITE.visible.toFixed(4)}, 0.6666667) - 1.0)

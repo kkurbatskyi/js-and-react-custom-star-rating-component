@@ -284,9 +284,14 @@ describe('samplePosition', () => {
     const m = createGalaxyModel(2);
     const rng = createRng(9);
     const p: [number, number, number] = [0, 0, 0];
-    const t0 = performance.now();
-    for (let i = 0; i < 200_000; i++) m.samplePosition(rng, p);
-    expect(performance.now() - t0).toBeLessThan(1500);
+    // Best of three: other processes may share the CPU; a real regression is slow every time.
+    let best = Number.POSITIVE_INFINITY;
+    for (let rep = 0; rep < 3; rep++) {
+      const t0 = performance.now();
+      for (let i = 0; i < 200_000; i++) m.samplePosition(rng, p);
+      best = Math.min(best, performance.now() - t0);
+    }
+    expect(best).toBeLessThan(1500);
   });
 });
 
@@ -305,11 +310,16 @@ describe('performance', () => {
       let acc = 0;
       for (let i = 0; i < 30_000; i += 3)
         acc += f(pts[i] as number, pts[i + 1] as number, pts[i + 2] as number);
-      const t0 = performance.now();
-      for (let i = 0; i < n * 3; i += 3)
-        acc += f(pts[i] as number, pts[i + 1] as number, pts[i + 2] as number);
+      // Best of three runs: robust to other processes sharing the CPU.
+      let best = Number.POSITIVE_INFINITY;
+      for (let rep = 0; rep < 3; rep++) {
+        const t0 = performance.now();
+        for (let i = 0; i < n * 3; i += 3)
+          acc += f(pts[i] as number, pts[i + 1] as number, pts[i + 2] as number);
+        best = Math.min(best, performance.now() - t0);
+      }
       expect(Number.isFinite(acc)).toBe(true);
-      return performance.now() - t0;
+      return best;
     };
     // 2× headroom over the 300 ms budget: test workers share the CPU.
     expect(time(m.stellarDensity)).toBeLessThan(600);
