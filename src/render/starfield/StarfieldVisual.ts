@@ -163,7 +163,7 @@ export class StarfieldVisual implements IStarfieldVisual {
   private blockFirst = new Int32Array(0);
   private starBlock = new Int32Array(0);
   private absMag = new Float32Array(0);
-  private offsets = new Float32Array(0); // count x 3, relative to `origin` (shared with the GPU buffer)
+  private offsets: Float32Array = new Float32Array(0); // count x 3, relative to `origin` (shared with the GPU buffer)
   private readonly origin = new Vector3();
 
   // Last-update camera state for CPU picking / anchors.

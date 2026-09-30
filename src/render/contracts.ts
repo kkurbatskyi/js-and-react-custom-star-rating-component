@@ -91,6 +91,11 @@ export interface GalaxyVisualOptions {
 
 export interface IGalaxyVisual extends Visual {
   update(frame: VisualFrame, o: GalaxyVisualOptions): void;
+  /**
+   * Suggested scene exposure for a camera position (≈2 inside the disk, ≈0.45 a few kly above it).
+   * The engine eases PostFX exposure towards it so every vantage point is well exposed.
+   */
+  exposureHint?(cameraLy: THREE.Vector3): number;
 }
 
 // ───────────────────────────────────────────── Starfield (layer units: light-years)
