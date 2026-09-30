@@ -20,10 +20,12 @@ const VIEWS: Readonly<Record<string, ViewPreset>> = {
   // ISS-like: ~7% above the surface, looking at the limb, sun behind the camera.
   limb: { cam: [1.075, 0, 89], target: LIMB_TARGET, sun: [-70, 32] },
   // Sunset on the limb: the sun just below the horizon ahead.
-  sunrise: { cam: [1.075, 0, 89], target: LIMB_TARGET, sun: [88, -2], star: true },
+  sunrise: { cam: [1.075, 0, 89], target: LIMB_TARGET, sun: [90, -21.6], star: true },
+  // Half-lit disc, close: the twilight arc along the terminator.
+  twilight: { cam: [1.6, 0, 12], sun: [96, 2] },
   // Inside the atmosphere, 0.6% of the radius up, looking at the horizon.
   low: { cam: [1.006, 0, 89], target: [1, 0.99, 0.02], sun: [-60, 40] },
-  dusk: { cam: [1.006, 0, 89], target: [1, 0.99, 0.02], sun: [80, 1.5], star: true },
+  dusk: { cam: [1.006, 0, 89], target: [1, 0.99, 0.02], sun: [88, -6.4], star: true },
 };
 
 const rig = await createSkyRig({

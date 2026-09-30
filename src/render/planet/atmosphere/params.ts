@@ -58,6 +58,12 @@ const COLUMN_MAX = 3;
 const TOP_IN_SCALE_HEIGHTS = 8.5;
 /** Giants: visible glow is ~3 scale heights, so a real 30 km scale height would be sub-pixel. */
 const GIANT_MIN_SCALE_HEIGHT = 0.0022;
+/**
+ * Artistic stretch of every gas scale height: the limb glow of a real photograph is taller than single
+ * scattering with the true scale height predicts (multiple scattering, airglow, exposure), and a 1% R
+ * shell is only ~2 px from far away.
+ */
+const VISUAL_HEIGHT_SCALE = 1.3;
 
 const SUBSCRIPTS = '₀₁₂₃₄₅₆₇₈₉';
 
@@ -165,7 +171,11 @@ export function deriveAtmosphere(body: BodyBase): AtmosphereParams | null {
   const giant = kind === 'gas-giant' || kind === 'ice-giant';
 
   const rawH = Number.isFinite(atm.scaleHeightKm) ? atm.scaleHeightKm : 8;
-  const H = Math.max(rawH, giant ? GIANT_MIN_SCALE_HEIGHT * R : 0.0004 * R, 0.5);
+  const H = Math.max(
+    rawH * VISUAL_HEIGHT_SCALE,
+    giant ? GIANT_MIN_SCALE_HEIGHT * R : 0.0004 * R,
+    0.5,
+  );
   const column = clamp(rayleighColumn(body), 0, COLUMN_MAX);
   const rayleigh = {
     beta: [
@@ -181,14 +191,22 @@ export function deriveAtmosphere(body: BodyBase): AtmosphereParams | null {
   const clouds = clamp(body.appearance.cloudCoverage, 0, 1);
   const table: Record<
     AtmosphereKind,
-    { tau: number; height: number; g: number; white: number; absorb: number; ms: number }
+    {
+      tau: number;
+      height: number;
+      g: number;
+      white: number;
+      absorb: number;
+      ms: number;
+      gain: number;
+    }
   > = {
-    terran: { tau: 0.06 + 0.05 * clouds, height: 0.16, g: 0.76, white: 0.85, absorb: 0.05, ms: 0.3 },
-    dusty: { tau: 0.55, height: 1.0, g: 0.62, white: 0.0, absorb: 1.2, ms: 0.3 },
-    hazy: { tau: 2.6, height: 1.5, g: 0.55, white: 0.0, absorb: 3.0, ms: 0.5 },
-    dense: { tau: 3.0, height: 1.0, g: 0.5, white: 0.15, absorb: 1.0, ms: 0.6 },
-    'gas-giant': { tau: 0.7, height: 1.2, g: 0.5, white: 0.5, absorb: 0.3, ms: 0.35 },
-    'ice-giant': { tau: 0.3, height: 1.2, g: 0.5, white: 0.2, absorb: 0.3, ms: 0.35 },
+    terran: { tau: 0.06 + 0.05 * clouds, height: 0.25, g: 0.76, white: 0.85, absorb: 0.05, ms: 0.3, gain: 1.8 },
+    dusty: { tau: 0.55, height: 1.0, g: 0.62, white: 0.0, absorb: 1.2, ms: 0.3, gain: 1.6 },
+    hazy: { tau: 2.6, height: 1.5, g: 0.55, white: 0.0, absorb: 3.0, ms: 0.5, gain: 1.5 },
+    dense: { tau: 3.0, height: 1.0, g: 0.5, white: 0.15, absorb: 1.0, ms: 0.6, gain: 1.3 },
+    'gas-giant': { tau: 0.7, height: 1.2, g: 0.5, white: 0.5, absorb: 0.3, ms: 0.35, gain: 1.8 },
+    'ice-giant': { tau: 0.3, height: 1.2, g: 0.5, white: 0.2, absorb: 0.3, ms: 0.35, gain: 1.8 },
   };
   const a = table[kind];
   const mieHeight = Math.max(a.height * H, 0.4);
@@ -241,7 +259,7 @@ export function deriveAtmosphere(body: BodyBase): AtmosphereParams | null {
     mie,
     absorber,
     multiScatter: a.ms,
-    gain: 1,
+    gain: a.gain,
   };
   return { ...partial, zenithTau: zenithTauOf(partial) };
 }
