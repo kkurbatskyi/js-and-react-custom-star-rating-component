@@ -6,9 +6,10 @@
  * Every mesh is a camera-facing quad expanded around the star centre; none uses vertex positions
  * in world space, so nothing loses precision at 1e10 km.
  */
-import { spriteGlsl } from '../starfield/photometry';
+
 import { common } from '../shaders/common.glsl';
 import { noise } from '../shaders/noise.glsl';
+import { spriteGlsl } from '../starfield/photometry';
 
 // ───────────────────────────────────────────────────────────────────── photosphere disc
 
@@ -171,8 +172,9 @@ void main() {
   // Flare: a compact white-blue kernel on the surface.
   if (uFlare.w > 0.001) {
     float cs = dot(normalize(pb), uFlare.xyz);
-    float k = smoothstep(0.975, 0.999, cs) * uFlare.w;
-    rgb += vec3(0.9, 0.95, 1.0) * (k * uBrightness * 1.2);
+    float k = smoothstep(0.985, 0.9995, cs);
+    k = k * k * uFlare.w;
+    rgb += vec3(0.9, 0.95, 1.0) * (k * uBrightness * 2.6);
   }
 
   cover *= uLimbSoft > 0.0 ? smoothstep(0.0, uLimbSoft, mu) : 1.0;

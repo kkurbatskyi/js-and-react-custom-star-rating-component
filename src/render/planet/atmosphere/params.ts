@@ -201,10 +201,18 @@ export function deriveAtmosphere(body: BodyBase): AtmosphereParams | null {
       gain: number;
     }
   > = {
-    terran: { tau: 0.06 + 0.05 * clouds, height: 0.25, g: 0.76, white: 0.85, absorb: 0.05, ms: 0.3, gain: 1.8 },
-    dusty: { tau: 0.55, height: 1.0, g: 0.62, white: 0.0, absorb: 1.2, ms: 0.3, gain: 1.6 },
-    hazy: { tau: 2.6, height: 1.5, g: 0.55, white: 0.0, absorb: 3.0, ms: 0.5, gain: 1.5 },
-    dense: { tau: 3.0, height: 1.0, g: 0.5, white: 0.15, absorb: 1.0, ms: 0.6, gain: 1.3 },
+    terran: {
+      tau: 0.06 + 0.05 * clouds,
+      height: 0.25,
+      g: 0.76,
+      white: 0.85,
+      absorb: 0.05,
+      ms: 0.3,
+      gain: 1.8,
+    },
+    dusty: { tau: 0.22, height: 1.0, g: 0.62, white: 0.0, absorb: 1.2, ms: 0.3, gain: 1.3 },
+    hazy: { tau: 2.6, height: 1.5, g: 0.55, white: 0.0, absorb: 3.0, ms: 0.5, gain: 4.5 },
+    dense: { tau: 3.0, height: 1.0, g: 0.5, white: 0.15, absorb: 1.0, ms: 0.6, gain: 5.0 },
     'gas-giant': { tau: 0.7, height: 1.2, g: 0.5, white: 0.5, absorb: 0.3, ms: 0.35, gain: 1.8 },
     'ice-giant': { tau: 0.3, height: 1.2, g: 0.5, white: 0.2, absorb: 0.3, ms: 0.35, gain: 1.8 },
   };
@@ -248,7 +256,10 @@ export function deriveAtmosphere(body: BodyBase): AtmosphereParams | null {
 
   // Cover the gas, the aerosol and (four widths above its centre) the absorber layer.
   const top = Math.min(
-    Math.max(TOP_IN_SCALE_HEIGHTS * Math.max(H, mieHeight), absorber.centerKm + 4 * absorber.widthKm),
+    Math.max(
+      TOP_IN_SCALE_HEIGHTS * Math.max(H, mieHeight),
+      absorber.centerKm + 4 * absorber.widthKm,
+    ),
     0.2 * R,
   );
   const partial = {

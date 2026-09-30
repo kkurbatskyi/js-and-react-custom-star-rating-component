@@ -5,9 +5,8 @@
  *   ?view=far|mid|limb|low|dusk|terminator|crescent|sunrise
  *   ?sun=<az>,<el>  ?cam=<dist>,<az>,<el>  ?real=1  ?parts=atm,cloud,ring  (see dev/skyKit.ts)
  */
-import { type ViewPreset, createSkyRig } from './skyKit';
-
-const NO_RING_SHADOW = 'float ringShadow(vec3 P, vec3 sunDir, vec4 ring) { return 1.0; }';
+import { ringShadowGlsl } from '../src/render/planet/rings';
+import { createSkyRig, type ViewPreset } from './skyKit';
 
 /** Camera on the polar axis looking along +X: local up = world +Y, the limb curves across the frame. */
 const LIMB_TARGET = [0.96, 0.795, 0.02] as const;
@@ -25,6 +24,9 @@ const VIEWS: Readonly<Record<string, ViewPreset>> = {
   twilight: { cam: [1.6, 0, 12], sun: [96, 2] },
   // Inside the atmosphere, 0.6% of the radius up, looking at the horizon.
   low: { cam: [1.006, 0, 89], target: [1, 0.99, 0.02], sun: [-60, 40] },
+  // Camera 2 km above the ground: the sky and the horizon haze from inside the shell.
+  ground: { cam: [1.0003, 0, 89], target: [0.99, 1.139, 0.0175], sun: [-50, 32] },
+  sunset: { cam: [1.0003, 0, 89], target: [0.99, 1.139, 0.0175], sun: [90, 0.6], star: true },
   dusk: { cam: [1.006, 0, 89], target: [1, 0.99, 0.02], sun: [88, -6.4], star: true },
 };
 
@@ -33,6 +35,6 @@ const rig = await createSkyRig({
   defaultBody: 'terran',
   defaultView: 'far',
   views: VIEWS,
-  ringShadowGlsl: NO_RING_SHADOW,
+  ringShadowGlsl,
 });
 rig.h.start();

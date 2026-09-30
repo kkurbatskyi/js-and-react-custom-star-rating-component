@@ -6,6 +6,7 @@
  *   ?dist=close|mid|system|far   3.5 R | 40 R | 215 R (1 AU for the Sun) | 3000 R  (default close)
  *   ?r=<n>                 distance in stellar radii (overrides ?dist)
  *   ?lens=0                black holes: do not install the lensing post effect
+ *   ?sky=0                 black holes: no synthetic background stars (default on, so lensing is visible)
  *   ?spin=<days/s>         simulation rate (default: the harness's)
  *   ?mode=starfield        draw the SAME star as a starfield sprite (StarfieldVisual, ly units) instead of a
  *                          StarVisual: compare probes of the two at equal ?r= to verify the photometry hand-off
@@ -14,18 +15,27 @@
  */
 import * as THREE from 'three';
 import type { StarDetails } from '../src/core/types';
+import { KM_PER_LY } from '../src/core/units';
 import type { IStarVisual } from '../src/render/contracts';
 import type { LensingEffect } from '../src/render/star/lensing';
 import { StarVisual } from '../src/render/star/StarVisual';
 import { StarfieldVisual } from '../src/render/starfield/StarfieldVisual';
-import { KM_PER_LY } from '../src/core/units';
 import { createHarness } from './harness';
 import { makeStar, STAR_TYPES, type StarTypeName } from './starTypes';
+
+declare global {
+  interface Window {
+    /** Debug handle for `--eval`: the lens state of each StarVisual on the page. */
+    __STAR__?: { lens: () => unknown[] };
+  }
+}
 
 const url = new URLSearchParams(location.search);
 const typeParam = url.get('type') ?? 'G';
 const gallery = typeParam === 'gallery';
-const type = (STAR_TYPES as readonly string[]).includes(typeParam) ? (typeParam as StarTypeName) : 'G';
+const type = (STAR_TYPES as readonly string[]).includes(typeParam)
+  ? (typeParam as StarTypeName)
+  : 'G';
 const DIST: Record<string, number> = { close: 3.5, mid: 40, system: 215, far: 3000 };
 const distR = Number(url.get('r') ?? DIST[url.get('dist') ?? 'close'] ?? 3.5);
 
@@ -70,13 +80,55 @@ if (gallery) {
   GALLERY.forEach((t, i) => {
     const cx = i % cols;
     const cy = Math.floor(i / cols);
-    build(t, ((cx - (cols - 1) / 2) * 0.235), (0.5 - cy) * 0.36, 10);
+    build(t, (cx - (cols - 1) / 2) * 0.235, (0.5 - cy) * 0.36, 10);
   });
 } else {
   build(type, 0, 0, distR);
 }
 
 const pos = new THREE.Vector3();
+
+// Synthetic background stars for lensing tests: additive points on a unit sphere that is rescaled to
+// the middle of the camera's depth range every frame (no depth test, so they read as an infinitely distant sky).
+let sky: THREE.Points | null = null;
+if (url.get('sky') !== '0' && items.some((i) => i.star.kind === 'black-hole')) {
+  const N = 2600;
+  const p = new Float32Array(N * 3);
+  const c = new Float32Array(N * 3);
+  let seed = 7;
+  const rnd = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  for (let i = 0; i < N; i++) {
+    const z = rnd() * 2 - 1;
+    const a = rnd() * Math.PI * 2;
+    const r = Math.sqrt(1 - z * z);
+    p.set([r * Math.cos(a), z, r * Math.sin(a)], i * 3);
+    const b = 0.25 + 2.2 * rnd() ** 6;
+    const warm = rnd();
+    c.set([b * (0.75 + 0.3 * warm), b * 0.9, b * (1.05 - 0.35 * warm)], i * 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  sky = new THREE.Points(
+    g,
+    new THREE.PointsMaterial({
+      size: 2.2,
+      sizeAttenuation: false,
+      vertexColors: true,
+      depthTest: false,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      toneMapped: false,
+    }),
+  );
+  sky.frustumCulled = false;
+  sky.renderOrder = -1;
+  h.scene.add(sky);
+}
 const ORIGIN = new THREE.Vector3();
 
 // Starfield mode: one catalogue star with this star's absolute magnitude and colour at the origin.
@@ -149,6 +201,7 @@ h.onFrame((f) => {
     far = Math.max(far, d + 8 * R);
     if (lensEffect) lensEffect.setState((it.visual as StarVisual).lens);
   }
+  if (sky) sky.scale.setScalar(0.5 * (near + far * 1.5));
   h.camera.near = near;
   h.camera.far = far * 1.5;
   h.camera.updateProjectionMatrix();
@@ -164,4 +217,5 @@ h.gui.add({ dist: url.get('dist') ?? 'close' }, 'dist', Object.keys(DIST)).onCha
   location.search = url.toString();
 });
 
+window.__STAR__ = { lens: () => items.map((i) => ({ ...(i.visual as StarVisual).lens })) };
 h.start();

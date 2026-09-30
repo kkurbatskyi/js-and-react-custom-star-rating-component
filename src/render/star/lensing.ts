@@ -25,14 +25,14 @@ import type { LensState } from './types';
 
 const fragmentShader = /* glsl */ `
 uniform vec4 uLensA;   // xy: hole position (uv), z: Einstein radius (viewport-height units), w: strength
-uniform vec4 uLensB;   // x: inner radius (height units), y: aspect (w / h), z: viewport height in CSS px
+uniform vec4 uLensB;   // x: inner radius (height units), y: aspect (w / h), z: viewport height in CSS px, w: end of the blend ramp
 
 void mainUv(inout vec2 uv) {
   if (uLensA.w <= 0.0 || uLensA.z <= 0.0) return;
   vec2 q = (uv - uLensA.xy) * vec2(uLensB.y, 1.0);
   float r = length(q);
   if (r < 1e-5) return;
-  float w = smoothstep(uLensB.x, uLensB.x * 1.9 + 1e-4, r);
+  float w = smoothstep(uLensB.x, uLensB.w, r);
   float te2 = uLensA.z * uLensA.z * uLensA.w;
   float rs = r - min(w * te2 / r, 2.5 * r);
   uv = uLensA.xy + q * (rs / r) / vec2(uLensB.y, 1.0);
@@ -45,6 +45,29 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   outputColor = vec4(inputColor.rgb * m, inputColor.a);
 }
 `;
+
+/**
+ * End radius of the blend ramp that fades the lens in from `inner`. The remap beta(r) = r - w(r) te2 / r
+ * folds (an image appears twice) where its slope drops below zero; the ramp is widened until the slope of
+ * w(r) te2 / r stays below 0.9 everywhere (checked on a few samples of the smoothstep).
+ */
+export function lensRampEnd(einstein: number, inner: number): number {
+  const r0 = Math.max(inner, 1e-4);
+  const te2 = einstein * einstein;
+  for (let k = 1.25; k <= 600; k *= 1.1) {
+    const r1 = r0 * k;
+    let ok = true;
+    for (let i = 1; i < 24 && ok; i++) {
+      const t = i / 24;
+      const r = r0 + (r1 - r0) * t;
+      const w = t * t * (3 - 2 * t);
+      const wp = (6 * t * (1 - t)) / (r1 - r0);
+      if ((wp * te2) / r - (w * te2) / (r * r) > 0.9) ok = false;
+    }
+    if (ok) return r1;
+  }
+  return r0 * 600;
+}
 
 export class LensingEffect extends Effect {
   private readonly a = new Uniform(new Vector4(0.5, 0.5, 0, 0));
@@ -81,8 +104,10 @@ export class LensingEffect extends Effect {
   ): void {
     const h = Math.max(viewportHeightPx, 1);
     this.a.value.set(uvX, uvY, einsteinRadiusPx / h, strength > 0 ? Math.min(strength, 1) : 0);
-    this.b.value.x = innerRadiusPx / h;
+    const inner = innerRadiusPx / h;
+    this.b.value.x = inner;
     this.b.value.z = h;
+    this.b.value.w = lensRampEnd(einsteinRadiusPx / h, inner);
   }
 
   /** Convenience: forward `StarVisual.lens` (disabled when `active` is false). */

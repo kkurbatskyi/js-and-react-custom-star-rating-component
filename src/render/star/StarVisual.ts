@@ -55,6 +55,8 @@ const SPRITE_FADE_PX: readonly [number, number] = [3, 24];
 /** Below this disc radius (CSS px) the photosphere mesh is skipped (the sprite carries the light). */
 const MIN_DISC_PX = 0.08;
 const CORONA_FADE_PX: readonly [number, number] = [4, 14];
+/** Apparent extent of a black hole relative to its horizon radius (the accretion disk's reach). */
+const HOLE_EXTENT = 12;
 /** Disc radii (CSS px) over which the photosphere eases from `brightness` to `closeBrightness`. */
 const EXPOSURE_PX: readonly [number, number] = [5, 50];
 /** The corona is drawn as if the disc were at least this bright, so it stays legible when stopped down. */
@@ -144,7 +146,8 @@ export class StarVisual implements IStarVisual {
   private readonly state: StarFrameState;
   private readonly luminosityV: number;
   private readonly flareOffset: number;
-  private readonly flareDir = new Vector3();
+  private readonly flareDir = new Vector3(0, 0, 1);
+  private flareCycle = Number.NaN;
 
   constructor(star: StarDetails, quality: Quality) {
     this.star = star;
@@ -157,7 +160,11 @@ export class StarVisual implements IStarVisual {
     // Spin axis: mostly along +Y with a seed-dependent tilt.
     const tilt = 0.08 + 0.5 * hashToUnit(hash32(star.seed, 11));
     const az = TAU * hashToUnit(hash32(star.seed, 12));
-    this.axisWorld.set(Math.sin(tilt) * Math.cos(az), Math.cos(tilt), Math.sin(tilt) * Math.sin(az));
+    this.axisWorld.set(
+      Math.sin(tilt) * Math.cos(az),
+      Math.cos(tilt),
+      Math.sin(tilt) * Math.sin(az),
+    );
     this.qAlign.setFromUnitVectors(Y_AXIS, this.axisWorld);
     this.state = {
       frame: null as unknown as VisualFrame,
@@ -328,7 +335,9 @@ export class StarVisual implements IStarVisual {
     su.uHaloGain.value = ps.haloGain;
     su.uSpikeLen.value = this.qualityLevel === 0 ? 0 : ps.spikePx;
     su.uSpikeGain.value = ps.spikeGain;
-    const resolved = smoothstep(SPRITE_FADE_PX[0], SPRITE_FADE_PX[1], discPx);
+    // A black hole's visible extent is its accretion disk (~12 r_s), not the horizon.
+    const extentPx = look.archetype === 'hole' ? discPx * HOLE_EXTENT : discPx;
+    const resolved = smoothstep(SPRITE_FADE_PX[0], SPRITE_FADE_PX[1], extentPx);
     su.uFade.value = o.intensity * (1 - resolved);
     this.sprite.visible = su.uFade.value > 0.001;
 
@@ -400,13 +409,20 @@ export class StarVisual implements IStarVisual {
     const tau = t - cycle * period; // seconds since this cycle's flare began
     const env = (1 - Math.exp(-tau / 0.6)) * Math.exp(-tau / 5.5);
     out.w = Math.min(1, env * 2.2) * this.look.flareStrength;
-    const h = hash32(this.star.seed, cycle, 991);
-    const lat = (hashToUnit(h) - 0.5) * 1.6;
-    const lon = TAU * hashToUnit(hash32(h, 5));
-    this.flareDir.set(Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon));
+    if (cycle !== this.flareCycle) {
+      // A new flare: pick its surface position once per cycle (hashing allocates, so not per frame).
+      this.flareCycle = cycle;
+      const h = hash32(this.star.seed, cycle, 991);
+      const lat = (hashToUnit(h) - 0.5) * 1.6;
+      const lon = TAU * hashToUnit(hash32(h, 5));
+      this.flareDir.set(
+        Math.cos(lat) * Math.cos(lon),
+        Math.sin(lat),
+        Math.cos(lat) * Math.sin(lon),
+      );
+    }
     out.x = this.flareDir.x;
     out.y = this.flareDir.y;
     out.z = this.flareDir.z;
   }
 }
-

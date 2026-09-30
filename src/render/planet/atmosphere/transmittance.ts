@@ -15,7 +15,14 @@
  * Built on the CPU (~50 k exp evaluations, a few ms) and uploaded as a half-float texture: no GPU bake,
  * no render-target format requirements, and it filters linearly on every WebGL2 device.
  */
-import { DataTexture, DataUtils, HalfFloatType, LinearFilter, RGBAFormat, type Texture } from 'three';
+import {
+  DataTexture,
+  DataUtils,
+  HalfFloatType,
+  LinearFilter,
+  RGBAFormat,
+  type Texture,
+} from 'three';
 import { type AtmosphereParams, extinctionAt } from './params';
 
 /** Texture width: the mu axis. */
@@ -105,7 +112,8 @@ export function lutToRMu(g: LutGeometry, xMu: number, xR: number): { r: number; 
   const dMin = g.rt - r;
   const dMax = rho + g.hb;
   const d = dMin + xMu * (dMax - dMin);
-  const mu = d < 1e-9 ? 1 : Math.min(1, Math.max(-1, (g.hb * g.hb - rho * rho - d * d) / (2 * r * d)));
+  const mu =
+    d < 1e-9 ? 1 : Math.min(1, Math.max(-1, (g.hb * g.hb - rho * rho - d * d) / (2 * r * d)));
   return { r, mu };
 }
 

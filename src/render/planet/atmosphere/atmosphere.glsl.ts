@@ -169,7 +169,9 @@ void main() {
   else fragColor = vec4(inscatter * uIntensity, 0.0);
 
   // Depth of the first atmosphere point on this pixel's ray (true distance: undo the oblate stretch).
-  float lam = (t0 + camDist) * length(vec3(d.x, d.y * uGeom.w, d.z));
+  // Slightly nearer than the true entry (1%): a 24-bit depth buffer cannot separate a shell from the surface
+  // it hovers over at large distances, and a shell is always in front of its own planet by construction.
+  float lam = 0.99 * (t0 + camDist) * length(vec3(d.x, d.y * uGeom.w, d.z));
   float depth = 0.0;
   if (lam > 1e-3) {
     vec4 c = uProj * vec4(normalize(vView) * lam, 1.0);

@@ -29,15 +29,23 @@ actually be drawn — lite visuals report `ready` at once but draw a few frames 
 
 Lite is a faithful low-detail version of full, not a different look: same seed, palette, terrain functions,
 lighting response and terminator, so the engine's swap at ~28 px radius changes detail only
-(`dev/planet.html?compare=1&px=30` renders both side by side). The lite bake starts lazily from the first
-`update()` (three per rendered frame across all visuals) and the visual stays hidden until it is drawable.
+(`dev/planet.html?compare=1&px=30&shells=0` renders both side by side: continents, palette, ice caps, band
+layout, terminator and lava glow match; only the sky specialist's clouds/atmosphere, which exist on full
+visuals alone, are approximated on lite by a folded-in cloud cover and rim).
+
+The lite bake is **instant**: it starts lazily from the first `update()` (at most two visuals per ~12 ms
+window across all of them, so 30 bodies spread over a few frames) and renders whole faces with no strips, no
+cost model and no GPU sync — a few thousand pixels in total. (A synced, time-sliced bake per lite body
+starved in the real app: every strip's `finish()` + readback drains everything the engine has queued, seconds
+on a software renderer, so lite planets stayed hidden and the planet layer drew nothing.) The visual stays
+hidden until `drawable`.
 
 ## Rocky bake (surface/bake.ts, glsl/bake*.glsl.ts)
 
 Three passes into cube maps, one face at a time as strips of rows:
 
 1. **terrain** -> temporary RGBA16F cube: height (0 = sea level), moisture, a style-specific mask (mare, lineae,
-   lava cracks), crater freshness / ray brightness. Continents are an 8-octave domain-warped simplex fBm whose
+   lava cracks), crater freshness / ray brightness. Continents are a 7-octave (gain 0.44) domain-warped simplex fBm whose
    sea level is the Gaussian quantile for `oceanCoverage` (`CONTINENT_SIGMA`; measured: 67.4 % vs 68 % on
    Halcyon); mountains are ridged multifractal masked to orogenic belts; craters are a 7-octave 3D-lattice
    population with depth ~ D^0.63 (d/D from 0.2 for small bowls to ~0.03 for basins), rays, mare flooding;
@@ -95,7 +103,12 @@ limb darkening; ring and eclipse shadows. Flow time is `simDays - epoch` plus a 
 `&shells=0` (hide the sky specialist's parts), `&budget=<ms>` (bake budget per frame; default 250),
 `&nightlights=0.8` (force a civilisation). `window.__COVERAGE__()` reads the baked cubes back (ocean/ice
 fractions vs the body's targets), `window.__PREP__` the time-slicing statistics.
-`dev/planets.html` is the twelve-world gallery (`?quality=`, `&sun=`, `&labels=0`, `&cols=`).
+`dev/planets.html` is the twelve-world gallery (`?quality=`, `&sun=`, `&labels=0`, `&cols=`, `&count=`, `&shells=0`).
+
+The real app was checked end to end (deep link `#1.399.0.-276.0.d`, Halcyon): the planet layer draws the lite
+visual within a few frames, drives `prepare()` on the full one, and swaps at ~28 px (`showingFull`) once it is
+ready. Note for whoever screenshots on a software renderer: a full bake there takes tens of seconds because
+each strip's sync waits for all queued frame work; on a GPU it is a few hundred milliseconds.
 
 ## Integration
 

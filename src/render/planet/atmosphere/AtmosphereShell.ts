@@ -66,12 +66,7 @@ export class AtmosphereShell implements IAtmosphereShell {
     this.u = {
       uLut: new Uniform(this.lut),
       uLutScale: new Uniform(
-        new Vector4(
-          1 - 1 / LUT_MU_SIZE,
-          1 - 1 / LUT_R_SIZE,
-          0.5 / LUT_MU_SIZE,
-          0.5 / LUT_R_SIZE,
-        ),
+        new Vector4(1 - 1 / LUT_MU_SIZE, 1 - 1 / LUT_R_SIZE, 0.5 / LUT_MU_SIZE, 0.5 / LUT_R_SIZE),
       ),
       uGeom: new Uniform(new Vector4(g.rp, g.rt, g.hb, this.oblate)),
       uMeshR: new Uniform(g.rt * MESH_MARGIN),

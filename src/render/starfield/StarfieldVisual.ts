@@ -356,7 +356,8 @@ export class StarfieldVisual implements IStarfieldVisual {
     this.object.geometry = geometry;
     old.dispose();
     this.capacity = capacity;
-    this.offsets = (geometry.getAttribute('iPos') as InstancedBufferAttribute).array as Float32Array;
+    this.offsets = (geometry.getAttribute('iPos') as InstancedBufferAttribute)
+      .array as Float32Array;
     this.starBlock = new Int32Array(capacity);
     this.absMag = new Float32Array(capacity);
     this.projX = new Float32Array(capacity);

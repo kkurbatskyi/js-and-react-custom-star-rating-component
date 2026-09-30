@@ -17,9 +17,9 @@ import * as THREE from 'three';
 import { blackbodyRGB } from '../src/core/color';
 import { createRng } from '../src/core/rng';
 import type { StarBlock } from '../src/core/types';
-import { BASE_CELL_LY, STAR_KINDS } from '../src/universe/contracts';
-import { StarfieldVisual } from '../src/render/starfield/StarfieldVisual';
 import { createGalaxyModel } from '../src/gen/galaxy/model';
+import { StarfieldVisual } from '../src/render/starfield/StarfieldVisual';
+import { BASE_CELL_LY, STAR_KINDS } from '../src/universe/contracts';
 import { createHarness } from './harness';
 
 declare global {
@@ -191,7 +191,8 @@ let resolvedIds = false;
 
 // Optional label overlay.
 const overlay = document.createElement('div');
-overlay.style.cssText = 'position:fixed;inset:0;pointer-events:none;font:10px monospace;color:#9fc4ff';
+overlay.style.cssText =
+  'position:fixed;inset:0;pointer-events:none;font:10px monospace;color:#9fc4ff';
 if (url.get('labels') === '1') document.body.append(overlay);
 const labelPool: HTMLDivElement[] = [];
 let mouse: { x: number; y: number } | null = null;
@@ -235,7 +236,8 @@ h.onFrame((f) => {
     stats.anchorsMs = performance.now() - t0;
     while (labelPool.length < anchors.length) {
       const d = document.createElement('div');
-      d.style.cssText = 'position:absolute;transform:translate(10px,-6px);white-space:nowrap;text-shadow:0 0 3px #000';
+      d.style.cssText =
+        'position:absolute;transform:translate(10px,-6px);white-space:nowrap;text-shadow:0 0 3px #000';
       overlay.append(d);
       labelPool.push(d);
     }
@@ -251,5 +253,12 @@ h.onFrame((f) => {
   }
 });
 
-window.__STARFIELD__ = { visual, get blocks() { return blocks; }, stats, camera: cameraLy };
+window.__STARFIELD__ = {
+  visual,
+  get blocks() {
+    return blocks;
+  },
+  stats,
+  camera: cameraLy,
+};
 h.start();

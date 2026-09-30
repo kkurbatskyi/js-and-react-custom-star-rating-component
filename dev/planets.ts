@@ -5,6 +5,7 @@
  *   ?quality=low|medium|high   bake resolution (256 / 512 / 1024 per cube face); low is quick to iterate
  *   ?sun=<azimuthDeg>,<elevationDeg>   shared light, relative to the camera (default -38,18: from the upper left)
  *   ?labels=0                  hide the captions      ?cols=<n> bodies per row (default 4)
+ *   ?count=<n>                 only the first n worlds
  *   ?shells=0                  hide the sky specialist's atmosphere, clouds and rings (surface only)
  *
  * Layout. Every body is placed at its real size but at the distance that gives all of them the same
@@ -45,7 +46,9 @@ const CELLS: readonly CellSpec[] = [
 const FOV_DEG = 22;
 const params = new URLSearchParams(location.search);
 const columns = Math.max(2, Number(params.get('cols') ?? 4));
-const rows = Math.ceil(CELLS.length / columns);
+// ?count=<n> shows only the first n worlds (quick checks on a loaded machine).
+const specs = CELLS.slice(0, Math.max(1, Number(params.get('count') ?? CELLS.length)));
+const rows = Math.ceil(specs.length / columns);
 const showLabels = params.get('labels') !== '0';
 
 const h = createHarness({
@@ -79,7 +82,7 @@ const sunDir = new THREE.Vector3(
 
 const pool = nearbyBodies();
 const cells: Cell[] = [];
-for (const spec of CELLS) {
+for (const spec of specs) {
   const picked = spec.id ? bodyById(spec.id) : pool.find((b) => b.body.type === spec.type);
   if (!picked) continue;
   const { body, system } = picked;
@@ -157,7 +160,8 @@ h.onFrame((f) => {
     c.visual.update(f, c.u);
     // The sky specialist's shells re-enable themselves in update(): hide them again for surface-only shots.
     if (hideShells) {
-      for (const child of c.visual.object.children) if (child.name !== 'surface') child.visible = false;
+      for (const child of c.visual.object.children)
+        if (child.name !== 'surface') child.visible = false;
     }
   }
 });

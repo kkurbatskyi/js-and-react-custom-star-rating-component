@@ -50,11 +50,15 @@ import { RockySurface } from './surface/RockySurface';
 
 /** Cube-face resolution of the tiny bake behind 'lite' rocky visuals. */
 export const LITE_BAKE_SIZE = 64;
-/** At most this many lite visuals advance their setup per rendered frame (spreads 30 bodies over frames). */
-const LITE_STARTS_PER_FRAME = 3;
+/**
+ * At most this many lite visuals advance their setup per ~frame (spreads 30 bodies over frames). The
+ * window is wall-clock, not `renderer.info.render.frame`: the bake's own render calls bump that counter.
+ */
+const LITE_STARTS_PER_WINDOW = 2;
+const LITE_WINDOW_MS = 12;
 const LITE_STEP_BUDGET_MS = 6;
 
-let liteFrame = -1;
+let liteWindowStart = Number.NEGATIVE_INFINITY;
 let liteStarted = 0;
 
 /** What every surface implementation offers the composer. */
@@ -96,7 +100,7 @@ export class PlanetVisual implements IPlanetVisual {
       this.baked = true;
     } else {
       const size = full ? BAKE_SIZE[quality] : LITE_BAKE_SIZE;
-      this.baker = new SurfaceBaker(this.look, size);
+      this.baker = new SurfaceBaker(this.look, size, !full);
       this.rocky = new RockySurface(body, this.look, quality, size, !full);
       this.surface = this.rocky;
       this.baked = false;
@@ -182,12 +186,12 @@ export class PlanetVisual implements IPlanetVisual {
   }
 
   private advanceLite(renderer: WebGLRenderer): void {
-    const frameNo = renderer.info.render.frame;
-    if (frameNo !== liteFrame) {
-      liteFrame = frameNo;
+    const now = performance.now();
+    if (now - liteWindowStart > LITE_WINDOW_MS) {
+      liteWindowStart = now;
       liteStarted = 0;
     }
-    if (liteStarted >= LITE_STARTS_PER_FRAME) return;
+    if (liteStarted >= LITE_STARTS_PER_WINDOW) return;
     liteStarted++;
     this.advance(renderer, LITE_STEP_BUDGET_MS);
   }

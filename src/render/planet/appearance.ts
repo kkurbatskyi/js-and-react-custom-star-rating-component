@@ -635,7 +635,9 @@ function deriveRockyLook(body: BodyBase, system: StarSystem | null): RockyLook {
   // ── climate ───────────────────────────────────────────────────────────
   const lut = temperatureProfile(body, locked);
   const iceCover = body.type === 'ice' || body.type === 'dwarf' ? 0 : body.iceCoverage;
-  const iceTempK = iceThresholdK(lut, locked, iceCover);
+  // The baked mask is soft (+-3 K), noisy and colder on mountains, which adds area: aim the quantile lower so
+  // the *rendered* ice fraction lands on `iceCoverage` (measured on Halcyon: 0.114 at the raw quantile vs 0.06).
+  const iceTempK = iceThresholdK(lut, locked, iceCover * 0.55);
 
   // ── ocean ─────────────────────────────────────────────────────────────
   let ocean: OceanLook | null = null;
@@ -735,7 +737,7 @@ function deriveGiantLook(body: BodyBase): GiantLook {
   let spotCount = rng.int(1, 3);
   let streaks = 0;
   if (ice) {
-    contrast = rng.range(0.14, 0.24);
+    contrast = rng.range(0.3, 0.42);
     turbulence = 0.32;
     bandFreq = rng.range(2.2, 3.8);
     spotCount = rng.chance(0.45) ? 1 : 0;

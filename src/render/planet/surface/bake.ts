@@ -108,6 +108,7 @@ export class SurfaceBaker {
   private face = 0;
   private row = 0;
   private readonly look: RockyLook;
+  private readonly instant: boolean;
   private heightRT: WebGLCubeRenderTarget | null = null;
   private albedoRT: WebGLCubeRenderTarget | null = null;
   private reliefRT: WebGLCubeRenderTarget | null = null;
@@ -125,9 +126,15 @@ export class SurfaceBaker {
   private readonly byteProbe = new Uint8Array(4);
   private disposed = false;
 
-  constructor(look: RockyLook, size: number) {
+  /**
+   * @param instant Tiny bakes ('lite' visuals, 64² per face): render whole faces with no budget, no cost
+   *   model and no GPU sync — the total work is a few thousand pixels, and a sync per strip would only add
+   *   round trips (each one drains everything the app has queued, seconds on a software renderer).
+   */
+  constructor(look: RockyLook, size: number, instant = false) {
     this.look = look;
     this.size = size;
+    this.instant = instant;
   }
 
   /** 0..1 progress (for dev UIs). */
@@ -184,7 +191,7 @@ export class SurfaceBaker {
       }
       do {
         this.runUnit(renderer, budgetMs - (performance.now() - start));
-      } while (!this.done && performance.now() - start < budgetMs);
+      } while (!this.done && (this.instant || performance.now() - start < budgetMs));
     } finally {
       renderer.setRenderTarget(prevTarget, prevFace, prevMip);
       renderer.autoClear = prevAutoClear;
@@ -389,7 +396,7 @@ export class SurfaceBaker {
     );
     const workMs = Math.max(remainingMs - Math.max(this.fixedMs, 0), Math.max(this.fixedMs, 0));
     const rows = est <= 0 ? INITIAL_ROWS : Math.max(1, Math.min(cap, Math.floor(workMs / est)));
-    const h = Math.min(rows, n - this.row);
+    const h = this.instant ? n - this.row : Math.min(rows, n - this.row);
     this.lastRows = Math.max(h, INITIAL_ROWS);
 
     for (const [p, m] of this.meshes) m.visible = p === pass;
@@ -401,13 +408,16 @@ export class SurfaceBaker {
     renderer.setRenderTarget(target, this.face);
     const t0 = performance.now();
     renderer.render(this.scene, this.camera);
-    this.sync(renderer, target === this.heightRT);
-    const dt = performance.now() - t0;
-    if (this.fixedMs < 0)
-      this.fixedMs = dt * 0.9; // the first strip is tiny: nearly all overhead
-    else if (h <= 2) this.fixedMs = Math.min(dt, this.fixedMs * 1.02);
-    const perRow = Math.max(dt - this.fixedMs, 0) / h;
-    this.rowMs[pass] = est <= 0 ? Math.max(perRow, 1e-4) : Math.max(est * 0.6 + perRow * 0.4, 1e-4);
+    if (!this.instant) {
+      this.sync(renderer, target === this.heightRT);
+      const dt = performance.now() - t0;
+      if (this.fixedMs < 0)
+        this.fixedMs = dt * 0.9; // the first strip is tiny: nearly all overhead
+      else if (h <= 2) this.fixedMs = Math.min(dt, this.fixedMs * 1.02);
+      const perRow = Math.max(dt - this.fixedMs, 0) / h;
+      this.rowMs[pass] =
+        est <= 0 ? Math.max(perRow, 1e-4) : Math.max(est * 0.6 + perRow * 0.4, 1e-4);
+    }
 
     this.row += h;
     if (this.row >= n) {
@@ -444,6 +454,6 @@ export class SurfaceBaker {
     renderer.setRenderTarget(rt, 0);
     renderer.render(this.scene, this.camera);
     rt.texture.generateMipmaps = false;
-    renderer.getContext().finish();
+    if (!this.instant) renderer.getContext().finish();
   }
 }

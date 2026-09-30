@@ -135,15 +135,22 @@ export function spriteFromFlux(flux: number, resScale: number, out: PointSource)
   const peak = Math.min(S.peakMax, peakRaw);
   const lp = Math.log10(1 + peak);
   // Past the peak cap the core stops growing but the glare keeps widening, a little per decade.
-  const decades = Math.min(S.glareDecades, Math.max(0, Math.log10(Math.max(peakRaw, 1e-30) / S.peakMax)));
+  const decades = Math.min(
+    S.glareDecades,
+    Math.max(0, Math.log10(Math.max(peakRaw, 1e-30) / S.peakMax)),
+  );
   const glare = 1 + S.glareGrow * decades;
   const sigma = Math.min(S.sigmaMax, S.sigmaMin + S.sigmaGrow * lp ** 1.5) * resScale;
   const halo = Math.min(S.haloMax, (S.haloBase + S.haloGrow * lp * lp) * glare) * resScale;
   const haloAbs = Math.min(S.haloGain * peak, S.haloCap);
-  const spikeAbs = Math.min(S.spikeGain * smooth(S.spikeKneeLo, S.spikeKneeHi, peak) * peak, S.spikeCap);
+  const spikeAbs = Math.min(
+    S.spikeGain * smooth(S.spikeKneeLo, S.spikeKneeHi, peak) * peak,
+    S.spikeCap,
+  );
   const spike =
     spikeAbs > S.visible
-      ? Math.min(S.spikeMax, S.spikeScale * (Math.sqrt(spikeAbs / S.visible) - 1) * glare) * resScale
+      ? Math.min(S.spikeMax, S.spikeScale * (Math.sqrt(spikeAbs / S.visible) - 1) * glare) *
+        resScale
       : 0;
   // Extent: where each component drops below the visibility threshold.
   const haloExtent =

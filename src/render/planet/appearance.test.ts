@@ -206,7 +206,7 @@ describe('deriveLook', () => {
     const gas = deriveLook(bodies.get('f') as BodyBase, system);
     const ice = deriveLook(bodies.get('g') as BodyBase, system);
     if (gas.family !== 'giant' || ice.family !== 'giant') throw new Error('expected giants');
-    expect(gas.contrast).toBeGreaterThan(ice.contrast * 2);
+    expect(gas.contrast).toBeGreaterThan(ice.contrast * 1.5);
     expect(gas.colors.length).toBeGreaterThanOrEqual(3);
     for (let i = 1; i < gas.colors.length; i++) {
       expect(lum(gas.colors[i] as RGB)).toBeGreaterThanOrEqual(lum(gas.colors[i - 1] as RGB));

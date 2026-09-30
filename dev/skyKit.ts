@@ -7,7 +7,7 @@
  *   ?body=terran|desert|hothouse|ocean|titan|giant|ice|<id>|home.d   the world (default terran = Halcyon)
  *   ?view=<preset>   camera + sun preset (page specific)
  *   ?sun=<az>,<el>   sun direction override, degrees (az from +Z towards +X, el above the XZ plane)
- *   ?cam=<dist>,<az>,<el>  camera override, planet radii and degrees   ?fov=<deg>
+ *   ?orbit=<dist>,<az>,<el>  camera override, planet radii and degrees   ?fov=<deg>
  *   ?star=1          draw the star's disc (default: only when the sun is near the view)
  *   ?tilt=1          use the body's real orientation (default: identity: ring plane = world XZ)
  *   ?parts=atm,cloud,ring   restrict to some sky parts
@@ -15,14 +15,19 @@
 import * as THREE from 'three';
 import { blackbodyRGB } from '../src/core/color';
 import type { BodyBase, StarSystem } from '../src/core/types';
-import type { ICloudLayer, IAtmosphereShell, IRingVisual, PlanetUniforms } from '../src/render/contracts';
-import { PlanetVisual } from '../src/render/planet/PlanetVisual';
+import type {
+  IAtmosphereShell,
+  ICloudLayer,
+  IRingVisual,
+  PlanetUniforms,
+} from '../src/render/contracts';
 import { createAtmosphere } from '../src/render/planet/atmosphere';
 import { createClouds } from '../src/render/planet/clouds';
-import { createRings } from '../src/render/planet/rings';
+import { PlanetVisual } from '../src/render/planet/PlanetVisual';
+import { createRings, ringUniformVector } from '../src/render/planet/rings';
 import { noise } from '../src/render/shaders/noise.glsl';
 import { bodyOrientation } from '../src/sim/orientation';
-import { type Harness, createHarness } from './harness';
+import { createHarness, type Harness } from './harness';
 import { isPlanetType, pickBody } from './planetBodies';
 
 const ALIASES: Readonly<Record<string, string>> = {
@@ -46,14 +51,24 @@ export interface ViewPreset {
   star?: boolean;
 }
 
-export function polar(dist: number, azDeg: number, elDeg: number, out = new THREE.Vector3()): THREE.Vector3 {
+export function polar(
+  dist: number,
+  azDeg: number,
+  elDeg: number,
+  out = new THREE.Vector3(),
+): THREE.Vector3 {
   const az = THREE.MathUtils.degToRad(azDeg);
   const el = THREE.MathUtils.degToRad(elDeg);
-  return out.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).multiplyScalar(dist);
+  return out
+    .set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el))
+    .multiplyScalar(dist);
 }
 
 function numbers(s: string | null): number[] {
-  return (s ?? '').split(',').map(Number).filter((n) => Number.isFinite(n));
+  return (s ?? '')
+    .split(',')
+    .map(Number)
+    .filter((n) => Number.isFinite(n));
 }
 
 const surfaceVertex = /* glsl */ `
@@ -108,7 +123,8 @@ void main() {
 class TestSurface {
   readonly mesh: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
   private readonly uniforms: Record<string, THREE.IUniform>;
-  private readonly sunLocal = new THREE.Vector3();
+  private readonly sunLocal = new THREE.Vector3(1, 0, 0);
+  private readonly sunRad = new THREE.Vector3(1, 1, 1);
   private readonly qInv = new THREE.Quaternion();
 
   constructor(body: BodyBase, ringShadowGlsl: string) {
@@ -121,21 +137,28 @@ class TestSurface {
     const ocean = body.appearance.oceanColor ?? [0, 0, 0];
     const ring = body.rings;
     this.uniforms = {
-      uRadii: { value: new THREE.Vector3(body.radiusKm, body.radiusKm * (1 - body.oblateness), body.radiusKm) },
-      uSunDir: { value: new THREE.Vector3(1, 0, 0) },
-      uSunRad: { value: new THREE.Vector3(1, 1, 1) },
+      uRadii: {
+        value: new THREE.Vector3(
+          body.radiusKm,
+          body.radiusKm * (1 - body.oblateness),
+          body.radiusKm,
+        ),
+      },
+      uSunDir: { value: this.sunLocal },
+      uSunRad: { value: this.sunRad },
       uCols: { value: [c(0), c(1), c(2)] },
       uOcean: { value: new THREE.Color(ocean[0], ocean[1], ocean[2]) },
       uOceanCov: { value: giant ? 0 : body.oceanCoverage },
       uGiant: { value: giant ? 1 : 0 },
       uRing: {
-        value: ring
-          ? new THREE.Vector4(ring.innerRadiusKm, ring.outerRadiusKm, ring.opticalDepth, ring.seed)
-          : new THREE.Vector4(0, 0, 0, 0),
+        value: ring ? new THREE.Vector4(...ringUniformVector(ring)) : new THREE.Vector4(0, 0, 0, 0),
       },
       uSeed: { value: (body.seed % 1000) / 37 },
     };
-    const fragment = surfaceFragment.replaceAll('RING_SHADOW', ring ? 'ringShadowTest(vLocal, uSunDir)' : '1.0');
+    const fragment = surfaceFragment.replaceAll(
+      'RING_SHADOW',
+      ring ? 'ringShadowTest(vLocal, uSunDir)' : '1.0',
+    );
     const helper = ring
       ? `${ringShadowGlsl}
 float ringShadowTest(vec3 P, vec3 L) { return ringShadow(P, L, uRing); }`
@@ -157,8 +180,7 @@ float ringShadowTest(vec3 P, vec3 L) { return ringShadow(P, L, uRing); }`
   update(u: PlanetUniforms): void {
     this.qInv.copy(u.orientation).invert();
     this.sunLocal.copy(u.sunDirection).applyQuaternion(this.qInv).normalize();
-    (this.uniforms.uSunDir?.value as THREE.Vector3).copy(this.sunLocal);
-    (this.uniforms.uSunRad?.value as THREE.Vector3).set(
+    this.sunRad.set(
       u.sunColor.r * u.sunIntensity,
       u.sunColor.g * u.sunIntensity,
       u.sunColor.b * u.sunIntensity,
@@ -184,7 +206,10 @@ export interface SkyRig {
   onUpdate: (cb: (f: import('../src/render/contracts').VisualFrame) => void) => void;
 }
 
-export function resolveBody(params: URLSearchParams, fallback: string): ReturnType<typeof pickBody> {
+export function resolveBody(
+  params: URLSearchParams,
+  fallback: string,
+): ReturnType<typeof pickBody> {
   const raw = params.get('body') ?? fallback;
   const q = new URLSearchParams();
   const alias = ALIASES[raw];
@@ -211,7 +236,7 @@ export async function createSkyRig(config: {
   const viewName = params.get('view') ?? config.defaultView;
   const preset = config.views[viewName] ?? config.views[config.defaultView];
   if (!preset) throw new Error('no view preset');
-  const camOverride = numbers(params.get('cam'));
+  const camOverride = numbers(params.get('orbit'));
   const cam =
     camOverride.length === 3 ? (camOverride as unknown as [number, number, number]) : preset.cam;
   const sunOverride = numbers(params.get('sun'));
@@ -219,11 +244,14 @@ export async function createSkyRig(config: {
   const fov = Number(params.get('fov') ?? preset.fov ?? 34);
 
   const camPos = polar(cam[0] * R, cam[1], cam[2]);
-  const target = preset.target ? new THREE.Vector3(...preset.target).multiplyScalar(R) : new THREE.Vector3();
+  const target = preset.target
+    ? new THREE.Vector3(...preset.target).multiplyScalar(R)
+    : new THREE.Vector3();
   const h = createHarness({
     title: `${body.name} - ${body.type} - ${viewName}`,
     fov,
-    near: R * 1e-4,
+    // Tight near plane for far views: a 24-bit depth buffer needs a sane near/far ratio (the engine slices depth).
+    near: Math.max(R * 1e-4, (cam[0] - 1.1) * R * 0.3),
     far: R * 500,
     cameraPosition: camPos,
     target,
@@ -260,7 +288,11 @@ export async function createSkyRig(config: {
   h.gui.add(ctl, 'sunEl', -80, 80, 1).name('sun elevation');
   h.gui.add(ctl, 'sunIntensity', 0.4, 2, 0.01).name('sun intensity');
   h.gui.add(ctl, 'intensity', 0, 1, 0.01).name('sky intensity');
-  for (const [name, part] of [['atmosphere', atmosphere], ['clouds', clouds], ['rings', rings]] as const) {
+  for (const [name, part] of [
+    ['atmosphere', atmosphere],
+    ['clouds', clouds],
+    ['rings', rings],
+  ] as const) {
     if (part) h.gui.add(part.object, 'visible').name(name);
   }
 
@@ -269,7 +301,8 @@ export async function createSkyRig(config: {
   const sunColor = new THREE.Color().setRGB(...blackbodyRGB(star.temperatureK));
   const starDistKm = Math.max(body.orbit.semiMajorAxisKm, 1);
   const sunAng = Math.max(Math.atan((star.radiusSolar * 695_700) / starDistKm), 0.002);
-  const drawStar = params.get('star') === '1' || (params.get('star') !== '0' && preset.star === true);
+  const drawStar =
+    params.get('star') === '1' || (params.get('star') !== '0' && preset.star === true);
   const starMesh = new THREE.Mesh(
     new THREE.SphereGeometry(1, 32, 16),
     new THREE.MeshBasicMaterial({ color: sunColor.clone().multiplyScalar(40), toneMapped: false }),

@@ -14,6 +14,7 @@
  */
 import type * as THREE from 'three';
 import type { BodyBase, BodyId, StarBlock, StarId } from '../core/types';
+import type { LensState } from './star/types';
 
 export type Quality = 'low' | 'medium' | 'high' | 'ultra';
 
@@ -136,6 +137,11 @@ export interface StarVisualOptions {
 
 export interface IStarVisual extends Visual {
   update(frame: VisualFrame, o: StarVisualOptions): void;
+  /**
+   * Gravitational-lensing state (black holes only; `active` false otherwise). The engine feeds it to
+   * the lensing post effect (`createLensingEffect` in src/render/star/lensing.ts) every frame.
+   */
+  readonly lens?: LensState;
 }
 
 // ───────────────────────────────────────────── Planets & moons (layer units: km)

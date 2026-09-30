@@ -72,7 +72,7 @@ export function starLook(star: StarDetails): StarLook {
 
   // Hot photospheres are brighter per unit area (sigma T^4), but the HDR budget tops out ~40.
   const brightness = clamp(14 * (tempK / 5772), 6, 40);
-  const closeBrightness = clamp(0.42 * (tempK / 5772) ** 0.5, 0.25, 1.0);
+  const closeBrightness = clamp(0.32 * (tempK / 5772) ** 0.5, 0.2, 0.9);
   const hotColor = saturateRGB(blackbodyRGB(Math.min(tempK, 6500) * 0.72), 1.15);
 
   const base: StarLook = {

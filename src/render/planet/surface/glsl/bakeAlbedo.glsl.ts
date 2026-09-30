@@ -56,7 +56,8 @@ float cityLights(vec3 p, float h, float Tk, float ice, float slope) {
   float region = 0.5 + 0.5 * fbm(p * 5.0 + uSeed * 2.3, 4);
   float dots = 1.0 - smoothstep(0.0, 0.34, worley(p * 46.0 + uSeed, 1.0).x);
   float dens = (0.25 + 0.75 * coast) * lowland * climate * (1.0 - ice) * (1.0 - smoothstep(0.1, 0.3, slope));
-  float lights = dens * (0.16 * smoothstep(0.3, 0.8, region) + 0.95 * smoothstep(0.5, 0.9, region) * dots);
+  // Mostly bright, sparse clusters; only a faint regional glow between them (real night lights are dotty).
+  float lights = dens * (0.05 * smoothstep(0.35, 0.8, region) + 1.1 * smoothstep(0.55, 0.9, region) * dots);
   return clamp(lights, 0.0, 1.0);
 }
 
