@@ -11,7 +11,7 @@
  * Camera-relative: the camera sits at the origin; `cameraLy` (galactic, float64 on the CPU) is
  * handed to the shaders, and the particle object is offset by −cameraLy.
  */
-import { type Data3DTexture, Group } from 'three';
+import { type Data3DTexture, Group, type Vector3 } from 'three';
 import { smoothstep } from '../../core/math';
 import type { GalaxyModel } from '../../core/types';
 import {
@@ -222,6 +222,13 @@ export class GalaxyVisual implements IGalaxyVisual {
     u.uStepLimits.value.set(25, 6000, 1500);
   }
 
+  /** target = unit-luminance population colour at tempK × k (allocation-free). */
+  private setColor(target: Vector3, tempK: number, k: number): void {
+    const rgb = this.rgb;
+    populationColorInto(tempK, this.look.saturation, rgb);
+    target.set((rgb[0] ?? 0) * k, (rgb[1] ?? 0) * k, (rgb[2] ?? 0) * k);
+  }
+
   /** Push `look` into the uniforms (recalibrating when its photometric inputs changed). */
   private syncLook(): GalaxyCalibration {
     const l = this.look;
@@ -229,24 +236,15 @@ export class GalaxyVisual implements IGalaxyVisual {
     const g = this.structure.gpu;
     const share = DEFAULT_PARTICLE_OPTIONS.share;
     const L = g.lightPerStar;
-    const rgb = this.rgb;
     const u = this.volume.uniforms;
-    const setColor = (
-      target: { set(x: number, y: number, z: number): unknown },
-      tempK: number,
-      k: number,
-    ): void => {
-      populationColorInto(tempK, l.saturation, rgb);
-      target.set((rgb[0] ?? 0) * k, (rgb[1] ?? 0) * k, (rgb[2] ?? 0) * k);
-    };
     const kE = cal.emission;
-    setColor(u.uColThin.value, l.diskK, kE * L.disk * (1 - share.disk));
-    setColor(u.uColThinInner.value, l.bulgeK + 500, kE * L.disk * (1 - share.disk));
-    setColor(u.uColThick.value, l.thickK, kE * L.disk * (1 - share.disk));
-    setColor(u.uColArm.value, l.youngK, kE * L.arm * (1 - share.arm));
-    setColor(u.uColArmInner.value, l.innerYoungK, kE * L.arm * (1 - share.arm));
+    this.setColor(u.uColThin.value, l.diskK, kE * L.disk * (1 - share.disk));
+    this.setColor(u.uColThinInner.value, l.bulgeK + 500, kE * L.disk * (1 - share.disk));
+    this.setColor(u.uColThick.value, l.thickK, kE * L.disk * (1 - share.disk));
+    this.setColor(u.uColArm.value, l.youngK, kE * L.arm * (1 - share.arm));
+    this.setColor(u.uColArmInner.value, l.innerYoungK, kE * L.arm * (1 - share.arm));
     u.uArmDetail.value.set(l.armMottling, l.beading);
-    setColor(u.uColSpheroid.value, l.bulgeK, kE * L.bulge * (1 - share.bulge));
+    this.setColor(u.uColSpheroid.value, l.bulgeK, kE * L.bulge * (1 - share.bulge));
     const hiiLum = 0.2126 * HII_GLOW[0] + 0.7152 * HII_GLOW[1] + 0.0722 * HII_GLOW[2];
     const hii = (kE * L.arm * g.armStrength * l.hiiGlow) / hiiLum;
     u.uColHii.value.set(HII_GLOW[0] * hii, HII_GLOW[1] * hii, HII_GLOW[2] * hii);

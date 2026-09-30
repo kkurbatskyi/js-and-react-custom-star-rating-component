@@ -79,6 +79,14 @@ of the frame interval steps the render scale in [0.5, 1] × cap down after 0.8 s
 refresh rate, probes up after 3 s at the refresh rate, and caps below a failed probe (no oscillation;
 tested against a synthetic vsync-quantised GPU).
 
+## View insets
+
+`engine.setViewInsets({ top, right, bottom, left })` (CSS px covered by UI panels / bottom sheets):
+the optical centre glides to the centre of the free rectangle via a three.js view offset on every
+layer camera, so arrivals are composed where the user can see them. `screenRay`, the sun position and
+all projection-matrix-based picking/labels account for it. Exposed to the UI as an extra
+`engineCommands().setViewInsets` (feature-check it until `EngineCommands` declares it).
+
 ## Contract extensions (compatible)
 
 `PickHit.x/y?` (hit screen position), `FrameInfo.travelDirection?` (view-space motion direction for

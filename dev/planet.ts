@@ -204,7 +204,8 @@ function coverage(): {
 window.__COVERAGE__ = coverage;
 
 // Time-slicing statistics of the bake (calls, longest call, total): window.__PREP__.
-const prep = { calls: 0, maxMs: 0, totalMs: 0, budgetMs: 10 };
+// ?budget=<ms> sets the per-frame bake budget (default 250: dev pages favour fast screenshots; use 8 to test smoothness).
+const prep = { calls: 0, maxMs: 0, totalMs: 0, budgetMs: Number(params.get('budget') ?? 250) };
 window.__PREP__ = prep;
 const bake = { prepare: visual.prepare.bind(visual) };
 void h.prepare(

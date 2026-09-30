@@ -10,12 +10,25 @@ export interface EngineCommands {
   resetView(): void;
   /** Render one frame at the current size and resolve a PNG blob (null if unsupported). */
   capture(): Promise<Blob | null>;
+  /**
+   * Screen area (CSS px) covered by UI chrome — side panel, bottom sheet — so the engine frames
+   * focused objects in the visible remainder instead of behind the panel.
+   */
+  setViewInsets(insets: ViewInsets): void;
+}
+
+export interface ViewInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
 }
 
 const noop: EngineCommands = {
   zoomBy() {},
   resetView() {},
   capture: async () => null,
+  setViewInsets() {},
 };
 
 let current: EngineCommands = noop;

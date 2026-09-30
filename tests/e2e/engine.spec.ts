@@ -133,3 +133,56 @@ test('going up a level starts a flight to the parent', async ({ page }) => {
     )
     .toEqual({ kind: 'star', id: HOME });
 });
+
+test('flies home, down to a planet and back up in real time', async ({ page }) => {
+  test.setTimeout(420_000);
+  await page.setViewportSize({ width: 480, height: 270 }); // SwiftShader: fewer pixels, more frames
+  const errors = await boot(page);
+  const state = () =>
+    page.evaluate(() => {
+      const s = (window as unknown as Win).__SIDEREAL__.store.getState() as unknown as {
+        focus: FocusLike;
+        level: string;
+        flightTarget: FocusLike | null;
+        visited: { id: string }[];
+      };
+      return {
+        focus: s.focus,
+        level: s.level,
+        flying: s.flightTarget !== null,
+        visited: s.visited.map((v) => v.id),
+        hash: window.location.hash,
+      };
+    });
+  const request = (kind: string, id: string) =>
+    page.evaluate(
+      ([k, i]) => {
+        const s = (window as unknown as Win).__SIDEREAL__.store.getState() as unknown as {
+          requestFocus(t: FocusLike, mode: 'fly'): void;
+        };
+        s.requestFocus({ kind: k, id: i }, 'fly');
+      },
+      [kind, id] as const,
+    );
+  const arrive = { timeout: 150_000, intervals: [1000] };
+
+  await request('star', HOME);
+  await expect.poll(async () => (await state()).focus, arrive).toEqual({ kind: 'star', id: HOME });
+  let s = await state();
+  expect(s.flying).toBe(false);
+  expect(s.level).toBe('system');
+  expect(s.visited).toContain(HOME);
+  await expect.poll(async () => (await state()).hash).toBe(`#${HOME}`);
+
+  await request('planet', HALCYON);
+  await expect
+    .poll(async () => (await state()).focus, arrive)
+    .toEqual({ kind: 'planet', id: HALCYON });
+  await expect.poll(async () => (await state()).level).toBe('planet');
+
+  await page.evaluate(() => (window as unknown as Win).__SIDEREAL__.store.getState().goUp());
+  await expect.poll(async () => (await state()).focus, arrive).toEqual({ kind: 'star', id: HOME });
+  s = await state();
+  expect(s.level).toBe('system');
+  expect(errors, errors.join('\n')).toEqual([]);
+});

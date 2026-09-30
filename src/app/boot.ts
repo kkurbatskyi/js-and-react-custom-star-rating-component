@@ -7,10 +7,10 @@
 import { formatCount } from '../core/format';
 import { log } from '../core/log';
 import type { LabelSpec } from '../engine/contracts';
-import { Engine } from '../engine/Engine';
+import { Engine, type ViewInsets } from '../engine/Engine';
 import { InputController } from '../engine/input/InputController';
 import { LabelOverlay } from '../engine/labels/LabelOverlay';
-import { registerEngineCommands } from '../state/bridge';
+import { type EngineCommands, registerEngineCommands } from '../state/bridge';
 import { store } from '../state/store';
 import { getUniverse } from '../universe';
 import { AudioBridge } from './AudioBridge';
@@ -198,26 +198,30 @@ async function start(
     },
   });
 
-  disposers.push(
-    registerEngineCommands({
-      zoomBy(factor) {
-        engine.rig.zoom(factor);
-      },
-      resetView() {
-        engine.rig.resetView(store.getState().settings.reducedMotion, engine.clock.simDays);
-      },
-      capture() {
-        return new Promise((resolve) => {
-          try {
-            engine.renderNow(); // same task as toBlob: the drawing buffer is still intact
-            canvas.toBlob((blob) => resolve(blob), 'image/png');
-          } catch {
-            resolve(null);
-          }
-        });
-      },
-    }),
-  );
+  // `setViewInsets` goes beyond today's EngineCommands (src/state/bridge.ts): the UI can reach it
+  // with `'setViewInsets' in engineCommands()` until the interface declares it.
+  const commands: EngineCommands & { setViewInsets(insets: Partial<ViewInsets>): void } = {
+    zoomBy(factor) {
+      engine.rig.zoom(factor);
+    },
+    resetView() {
+      engine.rig.resetView(store.getState().settings.reducedMotion, engine.clock.simDays);
+    },
+    capture() {
+      return new Promise((resolve) => {
+        try {
+          engine.renderNow(); // same task as toBlob: the drawing buffer is still intact
+          canvas.toBlob((blob) => resolve(blob), 'image/png');
+        } catch {
+          resolve(null);
+        }
+      });
+    },
+    setViewInsets(insets) {
+      engine.setViewInsets(insets);
+    },
+  };
+  disposers.push(registerEngineCommands(commands));
 
   installDebugHandle(engine, storeSync);
   disposers.push(() => {

@@ -118,8 +118,9 @@ export class SurfaceBaker {
   private lastRows = INITIAL_ROWS;
   private compileDone = false;
   private compileStarted = false;
-  /** Estimated milliseconds per row, per pass (exponential moving average). */
-  private readonly msPerRow: Record<Pass, number> = { terrain: 0, albedo: 0, relief: 0 };
+  /** Estimated milliseconds per row of work, per pass (exponential moving average), and the fixed sync cost. */
+  private readonly rowMs: Record<Pass, number> = { terrain: 0, albedo: 0, relief: 0 };
+  private fixedMs = -1;
   private readonly floatProbe = new Float32Array(4);
   private readonly byteProbe = new Uint8Array(4);
   private disposed = false;
@@ -361,15 +362,15 @@ export class SurfaceBaker {
       pass === 'terrain' ? this.heightRT : pass === 'albedo' ? this.albedoRT : this.reliefRT;
     if (!mesh || !target || !this.scene || !this.camera) return;
     const n = this.size;
-    const est = this.msPerRow[pass];
+    // Cost model per strip: dt = fixed + rowMs * rows. `fixed` is the round trip of the sync itself (large on
+    // software renderers, ~0.1 ms on a GPU); each strip is sized so its work at least matches that overhead.
+    const est = this.rowMs[pass];
     const cap = Math.min(
       Math.max(4, Math.floor(MAX_JOB_PIXELS / n)),
       Math.ceil(this.lastRows * MAX_GROWTH),
     );
-    const rows =
-      est <= 0
-        ? INITIAL_ROWS
-        : Math.max(1, Math.min(cap, Math.floor(Math.max(remainingMs, 0) / est)));
+    const workMs = Math.max(remainingMs - Math.max(this.fixedMs, 0), Math.max(this.fixedMs, 0));
+    const rows = est <= 0 ? INITIAL_ROWS : Math.max(1, Math.min(cap, Math.floor(workMs / est)));
     const h = Math.min(rows, n - this.row);
     this.lastRows = Math.max(h, INITIAL_ROWS);
 
@@ -384,8 +385,11 @@ export class SurfaceBaker {
     renderer.render(this.scene, this.camera);
     this.sync(renderer, target === this.heightRT);
     const dt = performance.now() - t0;
-    const perRow = dt / h;
-    this.msPerRow[pass] = est <= 0 ? perRow : est * 0.6 + perRow * 0.4;
+    if (this.fixedMs < 0)
+      this.fixedMs = dt * 0.9; // the first strip is tiny: nearly all overhead
+    else if (h <= 2) this.fixedMs = Math.min(dt, this.fixedMs * 1.02);
+    const perRow = Math.max(dt - this.fixedMs, 0) / h;
+    this.rowMs[pass] = est <= 0 ? Math.max(perRow, 1e-4) : Math.max(est * 0.6 + perRow * 0.4, 1e-4);
 
     this.row += h;
     if (this.row >= n) {

@@ -15,7 +15,7 @@ galaxy.samplePosition(rng, out);                  // particle position ∝ light
 |---|---|
 | `model.ts` | `createGalaxyModel(seed)`, `createGalaxyModelFromParams(params)` (dev harness: tweak a shape → `finalizeGalaxyParams` → model) |
 | `params.ts` | `createGalaxyParams(seed)` (memoised, returns copies), `drawGalaxyShape(seed)`, `finalizeGalaxyParams(shape)`, `GALAXY_HOME_DENSITY` |
-| `structure.ts` | internal: field math, LUTs, sampler, `integrateDensity`, `findHome` (tests and the model use it) |
+| `structure.ts` | internal: field math, LUTs, sampler, `integrateDensity`, `findHome` (tests and the model use it); `light()` (Σρ_c L_c) and `gpu` (every constant and table a GPU port needs — src/render/galaxy bakes the arm factor and midplane dust from it, tested against the CPU fields) |
 
 ## Frame
 Galactic frame G: Y = north, disk in XZ, light-years. `R = √(x² + z²)`, `θ = atan2(z, x)`.
@@ -71,7 +71,7 @@ baked on a 256² grid (bilinear lookups), giving clumpy arms.
 
 ### Dust, populations
 ```
-dust  = D_dust(R) · sech²(y/h_dust) · g(x,z) · (0.15 + 0.85·env·exp(−(d − 0.5σ)²/(2(0.45σ)²)))
+dust  = D_dust(R) · sech²(y/h_dust) · g(x,z) · (0.07 + 0.93·env·exp(−(d − 0.5σ)²/(2(0.45σ)²)))
 young = (ρ_arm + 0.05 ρ_thin) / ρ            bulgeFraction = (ρ_bulge + ρ_bar) / ρ
 ```
 Dust lanes sit half a σ inside each ridge (the concave side, as in real spirals); `D_dust` has a
@@ -114,6 +114,9 @@ Tricks: radial profiles and sech² are float64 LUTs (relative error < 1e-4); scr
 a `Float64Array` because storing doubles into captured `let`s boxes a HeapNumber per write; the
 arm index uses int32 `%` (double `%` is an fmod call). The fields share closure scratch, so a model
 is not re-entrant (irrelevant on one thread; build one per worker).
+
+The interarm dust floor is 0.07 (was 0.15): dust is visual only (the catalogue uses the stellar
+density), and a lower floor lets sightlines inside the disk reach the band's star clouds.
 
 ## Limits / ideas for the galaxy-render owner
 * No disk warp, flaring or spurs between arms; the bar is Gaussian rather than Ferrers-like.
