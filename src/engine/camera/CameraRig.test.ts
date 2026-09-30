@@ -141,6 +141,37 @@ describe('CameraRig', () => {
     expect(seen.angleTo(dir)).toBeLessThan(1e-6);
   });
 
+  it('coasts after a flick and stops after a slow release', () => {
+    const yawOf = (rig: CameraRig) =>
+      Math.atan2(
+        rig.offsetKm.clone().applyQuaternion(rig.focus.frame.clone().invert()).x,
+        rig.offsetKm.clone().applyQuaternion(rig.focus.frame.clone().invert()).z,
+      );
+    const flick = rigAt({ kind: 'planet', id: HALCYON }, 30_000);
+    for (let i = 0; i < 6; i++) {
+      flick.orbit(0.02, 0); // 1.2 rad/s
+      flick.update(1 / 60, DAYS);
+    }
+    const released = yawOf(flick);
+    run(flick, 0.5);
+    const coasted = yawOf(flick) - released;
+    expect(coasted).toBeGreaterThan(0.2); // 0.12 rad of pending damping + ~0.24 rad of momentum
+    run(flick, 2);
+    const settled = yawOf(flick);
+    run(flick, 1);
+    expect(Math.abs(yawOf(flick) - settled)).toBeLessThan(1e-4);
+
+    const slow = rigAt({ kind: 'planet', id: HALCYON }, 30_000);
+    for (let i = 0; i < 6; i++) {
+      slow.orbit(0.001, 0); // 0.06 rad/s: below the coasting threshold
+      slow.update(1 / 60, DAYS);
+    }
+    run(slow, 1);
+    const stop = yawOf(slow);
+    run(slow, 1);
+    expect(Math.abs(yawOf(slow) - stop)).toBeLessThan(1e-6);
+  });
+
   it('fades instead of flying under reduced motion', () => {
     const rig = rigAt({ kind: 'planet', id: HALCYON }, 30_000);
     const to = handle({ kind: 'star', id: HOME });

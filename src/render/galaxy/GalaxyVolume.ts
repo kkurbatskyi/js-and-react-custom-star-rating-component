@@ -25,8 +25,8 @@ import {
   Vector2,
   Vector3,
   Vector4,
-  WebGLRenderTarget,
   type WebGLRenderer,
+  WebGLRenderTarget,
 } from 'three';
 import type { VisualFrame } from '../contracts';
 import { fullScreenTriangle } from './GalaxyMap';

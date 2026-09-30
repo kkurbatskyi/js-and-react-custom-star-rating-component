@@ -18,13 +18,13 @@ import {
   Mesh,
   NearestFilter,
   OrthographicCamera,
-  ShaderMaterial,
   RedFormat,
   RGBAFormat,
   RGFormat,
   Scene,
-  WebGLRenderTarget,
+  ShaderMaterial,
   type WebGLRenderer,
+  WebGLRenderTarget,
 } from 'three';
 import { hash32, hashToUnit } from '../../core/hash';
 import type { GalaxyStructure } from '../../gen/galaxy/structure';
@@ -71,7 +71,13 @@ export class GalaxyMap {
       RedFormat,
       FloatType,
     );
-    this.grid = new DataTexture(Float32Array.from(g.noiseGrid), g.gridN, g.gridN, RGFormat, FloatType);
+    this.grid = new DataTexture(
+      Float32Array.from(g.noiseGrid),
+      g.gridN,
+      g.gridN,
+      RGFormat,
+      FloatType,
+    );
     for (const t of [this.wiggle, this.grid]) {
       t.minFilter = NearestFilter;
       t.magFilter = NearestFilter;

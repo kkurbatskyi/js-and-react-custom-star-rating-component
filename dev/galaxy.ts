@@ -140,7 +140,11 @@ for (const key of ['bulgeK', 'diskK', 'thickK', 'youngK', 'innerYoungK'] as cons
 colour.add(look, 'saturation', 0.5, 2, 0.01).onFinishChange(() => visual.rebuildParticles());
 colour.close();
 
+// Exposure: follow the visual's hint (a stand-in for engine auto-exposure) unless ?exposure=.
+const autoExposure = { enabled: !url.has('exposure') };
+gui.add(autoExposure, 'enabled').name('exposure hint');
 h.onFrame((frame) => {
+  if (autoExposure.enabled) h.post.setExposure(visual.exposureHint(h.cameraWorldPosition));
   visual.update(frame, options);
 });
 

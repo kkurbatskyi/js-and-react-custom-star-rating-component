@@ -46,6 +46,14 @@ export interface EngineHooks {
   afterRender?(frame: FrameInfo): void;
 }
 
+/** Screen margins covered by UI (CSS px): the view is composed in the remaining rectangle. */
+export interface ViewInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
 export interface EngineStats {
   fps: number;
   /** EMA of the frame interval, ms. */
@@ -58,6 +66,8 @@ export interface EngineStats {
 }
 
 const MAX_DT_SEC = 0.1;
+/** Rate at which the optical centre glides to new view insets, 1/s. */
+const INSET_LAMBDA = 7;
 const STATS_ALPHA = 0.08;
 /** Fraction of the viewport beyond its edges over which an off-screen sun fades out. */
 const SUN_EDGE_MARGIN = 0.15;
@@ -105,6 +115,10 @@ export class Engine {
   private readonly travelDir = new Vector3();
   private readonly sunInfo = { x: 0, y: 0, visibility: 0 };
   private readonly discs: ScreenDisc[] = [];
+  private readonly insets: ViewInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+  /** Current (damped) optical-centre shift, CSS px: the view offset applied to every camera. */
+  private shiftX = 0;
+  private shiftY = 0;
   private readonly labelScratch: LabelSpec[] = [];
   private raf = 0;
   private running = false;
@@ -230,6 +244,15 @@ export class Engine {
       for (const layer of this.layerList) layer.setQuality?.(q);
     }
     this.needsResize = true;
+  }
+
+  /**
+   * Compose the view in the part of the screen not covered by UI: the optical centre glides to the
+   * centre of the free rectangle (three.js view offset on every layer camera), so a focused object
+   * is centred where the user can see it. Picking, labels and rays stay consistent.
+   */
+  setViewInsets(insets: Partial<ViewInsets>): void {
+    Object.assign(this.insets, insets);
   }
 
   setUniverse(universe: Universe): void {
@@ -386,17 +409,23 @@ export class Engine {
   private updateLayers(): void {
     const f = this.frame;
     const aspect = f.width / f.height;
+    const i = this.insets;
+    const k = f.dtSec > 0 ? 1 - Math.exp(-INSET_LAMBDA * f.dtSec) : 1;
+    this.shiftX += ((i.right - i.left) / 2 - this.shiftX) * k;
+    this.shiftY += ((i.bottom - i.top) / 2 - this.shiftY) * k;
+    const shifted = Math.abs(this.shiftX) > 0.05 || Math.abs(this.shiftY) > 0.05;
     this.stack.begin();
     const layers = this.layerList;
     for (let i = 0; i < layers.length; i++) {
       const camera = this.cameras[i];
       camera.position.set(0, 0, 0);
       camera.quaternion.copy(this.snapshot.quaternion);
-      if (camera.fov !== this.fovDeg || camera.aspect !== aspect) {
-        camera.fov = this.fovDeg;
-        camera.aspect = aspect;
-        camera.updateProjectionMatrix();
-      }
+      camera.fov = this.fovDeg;
+      camera.aspect = aspect;
+      if (shifted)
+        camera.setViewOffset(f.width, f.height, this.shiftX, this.shiftY, f.width, f.height);
+      else if (camera.view?.enabled) camera.clearViewOffset();
+      camera.updateProjectionMatrix();
       camera.updateMatrixWorld();
       const slices = layers[i].update(f, camera);
       this.active[i] = slices !== null && slices.length > 0;
@@ -441,9 +470,9 @@ export class Engine {
     const t = Math.tan(this.snapshot.fovY / 2);
     const ndcX = _v.x / (-_v.z * t * (f.width / f.height));
     const ndcY = _v.y / (-_v.z * t);
-    s.x = (ndcX * 0.5 + 0.5) * f.width;
-    s.y = (0.5 - ndcY * 0.5) * f.height;
-    const edge = Math.max(Math.abs(ndcX), Math.abs(ndcY));
+    s.x = (ndcX * 0.5 + 0.5) * f.width - this.shiftX;
+    s.y = (0.5 - ndcY * 0.5) * f.height - this.shiftY;
+    const edge = Math.max(Math.abs((s.x / f.width) * 2 - 1), Math.abs((s.y / f.height) * 2 - 1));
     let vis = 1 - smoothstep(1, 1 + 2 * SUN_EDGE_MARGIN, edge);
     if (vis > 0) {
       // Occluded by a body disc of any layer (the star's own disc is concentric: skipped).
@@ -477,8 +506,8 @@ export class Engine {
   screenRay(x: number, y: number, out: Vector3): Vector3 {
     const f = this.frame;
     const t = Math.tan(this.snapshot.fovY / 2);
-    const ndcX = (x / f.width) * 2 - 1;
-    const ndcY = 1 - (y / f.height) * 2;
+    const ndcX = ((x + this.shiftX) / f.width) * 2 - 1;
+    const ndcY = 1 - ((y + this.shiftY) / f.height) * 2;
     return out
       .set(ndcX * t * (f.width / f.height), ndcY * t, -1)
       .normalize()

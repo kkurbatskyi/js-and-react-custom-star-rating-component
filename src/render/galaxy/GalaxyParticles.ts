@@ -15,8 +15,12 @@ import {
 } from 'three';
 import type { GalaxyStructure } from '../../gen/galaxy/structure';
 import type { VisualFrame } from '../contracts';
+import {
+  type GalaxyParticleData,
+  generateGalaxyParticles,
+  type ParticleOptions,
+} from './particles';
 import { particleFragment, particleVertex } from './particles.glsl';
-import { type GalaxyParticleData, generateGalaxyParticles, type ParticleOptions } from './particles';
 import type { GalaxyFieldUniforms } from './uniforms';
 
 function buildGeometry(data: GalaxyParticleData): BufferGeometry {

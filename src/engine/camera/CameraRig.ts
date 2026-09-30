@@ -38,6 +38,10 @@ const ROTATE_LAMBDA = 11;
 const ZOOM_LAMBDA = 7;
 /** Orientation-correction decay rate, 1/s (~0.45 s to settle). */
 const CORRECTION_LAMBDA = 6.5;
+/** Orbit momentum friction, 1/s: a released drag coasts ~1/FRICTION seconds. */
+const ORBIT_FRICTION = 5;
+/** Momentum is only kept for flicks faster than this, rad/s (a slow release just stops). */
+const MIN_COAST_SPEED = 0.15;
 /** Seconds without input before the galaxy overview starts to drift round. */
 const IDLE_BEFORE_AUTOROTATE_SEC = 4;
 /** Reduced-motion "flight": fade out, cut, fade in. */
@@ -98,6 +102,11 @@ export class CameraRig {
   private pitchT = 0;
   private logDistT = 0;
   private readonly correction = new Quaternion();
+  /** Orbit input since the last update, and the momentum it implies (rad, rad/s). */
+  private pendingYaw = 0;
+  private pendingPitch = 0;
+  private yawVel = 0;
+  private pitchVel = 0;
   private readonly zoomAnchorLy = new Vector3();
   private hasZoomAnchor = false;
   private idleSec = 0;
@@ -145,8 +154,8 @@ export class CameraRig {
     this.interrupt();
     this.touch();
     this.hasZoomAnchor = false;
-    this.yawT += dYaw;
-    this.pitchT = clamp(this.pitchT + dPitch, -MAX_PITCH, MAX_PITCH);
+    this.pendingYaw += dYaw;
+    this.pendingPitch += dPitch;
   }
 
   /**
@@ -291,6 +300,7 @@ export class CameraRig {
     const fj = this.fadeJump;
     if (fj) this.stepFade(fj, dtSec, simDays);
 
+    this.applyOrbitInput(dtSec);
     this.idleSec += dtSec;
     if (
       this.autoRotate &&
@@ -314,6 +324,34 @@ export class CameraRig {
     this.idleSec = 0;
   }
 
+  /**
+   * Apply this frame's orbit input and keep a velocity estimate; without input the orbit coasts on
+   * that velocity with exponential friction, so a flick glides to a stop instead of halting.
+   */
+  private applyOrbitInput(dtSec: number): void {
+    if (dtSec <= 0) return;
+    if (this.pendingYaw !== 0 || this.pendingPitch !== 0) {
+      const k = dampFactor(20, dtSec); // velocity EMA over the last few frames
+      this.yawVel += (this.pendingYaw / dtSec - this.yawVel) * k;
+      this.pitchVel += (this.pendingPitch / dtSec - this.pitchVel) * k;
+      this.yawT += this.pendingYaw;
+      this.pitchT = clamp(this.pitchT + this.pendingPitch, -MAX_PITCH, MAX_PITCH);
+      this.pendingYaw = 0;
+      this.pendingPitch = 0;
+      return;
+    }
+    if (Math.hypot(this.yawVel, this.pitchVel) < MIN_COAST_SPEED) {
+      this.yawVel = 0;
+      this.pitchVel = 0;
+      return;
+    }
+    const decay = Math.exp(-ORBIT_FRICTION * dtSec);
+    this.yawT += this.yawVel * dtSec;
+    this.pitchT = clamp(this.pitchT + this.pitchVel * dtSec, -MAX_PITCH, MAX_PITCH);
+    this.yawVel *= decay;
+    this.pitchVel *= decay;
+  }
+
   private cancelMotion(): void {
     this.flight = null;
     if (this.fadeJump) {
@@ -323,6 +361,7 @@ export class CameraRig {
   }
 
   private setPose(pose: OrbitPose): void {
+    this.yawVel = this.pitchVel = this.pendingYaw = this.pendingPitch = 0;
     this.yaw = this.yawT = pose.yaw;
     this.pitch = this.pitchT = clamp(pose.pitch, -MAX_PITCH, MAX_PITCH);
     this.logDist = this.logDistT = Math.log(Math.max(pose.distanceKm, 1e-9));

@@ -47,6 +47,7 @@ export class GalaxyLayer implements Layer {
   private readonly scratch = new Vector3();
   private readonly screen: ScreenPoint = { x: 0, y: 0, depth: 0 };
   private camera: PerspectiveCamera | null = null;
+  private level: FrameInfo['level'] = 'galaxy';
   private width = 1;
   private height = 1;
 
@@ -73,13 +74,15 @@ export class GalaxyLayer implements Layer {
     this.visual.update(syncVisualFrame(this.vframe, frame, camera), this.options);
 
     this.camera = camera;
+    this.level = frame.level;
     this.width = frame.width;
     this.height = frame.height;
     return this.slices;
   }
 
   labels(out: LabelSpec[]): void {
-    if (!this.camera || !this.ctx.labelsEnabled()) return;
+    // Galaxy-scale features belong to the galaxy view; inside a system they only clutter the sky.
+    if (!this.camera || this.level !== 'galaxy' || !this.ctx.labelsEnabled()) return;
     const u = this.universe;
     const slot = this.pushLabel(
       out,

@@ -105,6 +105,12 @@ export interface GalaxyLook {
   innerYoungK: number;
   /** Chroma boost about the luminance axis (blackbody colours are pale; §9 suggests ~1.25). */
   saturation: number;
+  /**
+   * Exposure hints (see `GalaxyVisual.exposureHint`): inside the disk the band is fainter than the
+   * face-on galaxy; a few kly above the disk its grazing, sunlit-floor view is far brighter.
+   */
+  insideExposure: number;
+  aboveExposure: number;
   /** Smallest Gaussian σ of a particle, device px (keeps unresolved particles stable). */
   minSigmaPx: number;
   /**
@@ -138,6 +144,8 @@ export function defaultGalaxyLook(): GalaxyLook {
     youngK: 12_000,
     innerYoungK: 5200,
     saturation: 1.5,
+    insideExposure: 2,
+    aboveExposure: 0.45,
     minSigmaPx: 0.75,
     maxSigmaPx: 1,
   };

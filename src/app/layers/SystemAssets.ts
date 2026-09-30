@@ -181,6 +181,7 @@ export class SystemAssets {
 /** The last few systems' assets (flight endpoints), least-recently-used disposed first. */
 export class SystemAssetCache {
   private readonly entries = new Map<string, SystemAssets>();
+  private last: SystemAssets | null = null;
   private quality: Quality;
   private readonly capacity: number;
 
@@ -190,17 +191,21 @@ export class SystemAssetCache {
   }
 
   get(system: StarSystem): SystemAssets {
+    if (this.last?.system.id === system.id) return this.last; // steady state: no LRU churn
     let assets = this.entries.get(system.id);
     if (assets) {
+      this.last = assets;
       this.entries.delete(system.id); // re-insert: most recent last
       this.entries.set(system.id, assets);
       return assets;
     }
     assets = new SystemAssets(system, this.quality);
     this.entries.set(system.id, assets);
+    this.last = assets;
     while (this.entries.size > this.capacity) {
       const [oldestId, oldest] = this.entries.entries().next().value as [string, SystemAssets];
       this.entries.delete(oldestId);
+      if (this.last === oldest) this.last = null;
       oldest.dispose();
     }
     return assets;
@@ -218,5 +223,6 @@ export class SystemAssetCache {
   clear(): void {
     for (const a of this.entries.values()) a.dispose();
     this.entries.clear();
+    this.last = null;
   }
 }

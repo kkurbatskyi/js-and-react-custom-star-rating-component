@@ -158,7 +158,11 @@ export function generateGalaxyParticles(
 
   const write = (i: number, x: number, y: number, z: number, s: number, k: number): void => {
     if (compress) {
-      compression[i] = compressLight(structure.light(x, y, z), options.kneeLight, options.kneeGamma);
+      compression[i] = compressLight(
+        structure.light(x, y, z),
+        options.kneeLight,
+        options.kneeGamma,
+      );
     }
     positions[i * 3] = x;
     positions[i * 3 + 1] = y;
@@ -212,7 +216,6 @@ export function generateGalaxyParticles(
     }
   }
 
-
   // ── Clumped knots: clusters and HII regions beaded along the arms.
   const armLight = structure.componentStars.arm * g.lightPerStar.arm;
   const clumps = (
@@ -245,18 +248,36 @@ export function generateGalaxyParticles(
       }
     }
   };
-  clumps('clusters', nField, nCluster, PARTICLE_KIND.cluster, 0, 0.6, 140, options.clusterSigmaLy,
+  clumps(
+    'clusters',
+    nField,
+    nCluster,
+    PARTICLE_KIND.cluster,
+    0,
+    0.6,
+    140,
+    options.clusterSigmaLy,
     (rng, i) => {
       populationColorInto(options.youngK * rng.range(1, 2.4), options.saturation, radiance, i * 3);
-    });
-  clumps('hii', nField + nCluster, nHii, PARTICLE_KIND.hii, 0.2, 0.35, 220, options.hiiSigmaLy,
+    },
+  );
+  clumps(
+    'hii',
+    nField + nCluster,
+    nHii,
+    PARTICLE_KIND.hii,
+    0.2,
+    0.35,
+    220,
+    options.hiiSigmaLy,
     (rng, i) => {
       const c = HII_COLORS[rng.int(0, HII_COLORS.length - 1)] as readonly [number, number, number];
       const lum = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
       radiance[i * 3] = c[0] / lum;
       radiance[i * 3 + 1] = c[1] / lum;
       radiance[i * 3 + 2] = c[2] / lum;
-    });
+    },
+  );
 
   // ── Normalise each kind's total flux to its light budget; store peak radiance Φ / (2πσ²).
   const totals: readonly (readonly [number, number, number])[] = [

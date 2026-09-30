@@ -12,6 +12,7 @@
  * handed to the shaders, and the particle object is offset by −cameraLy.
  */
 import { type Data3DTexture, Group } from 'three';
+import { smoothstep } from '../../core/math';
 import type { GalaxyModel } from '../../core/types';
 import {
   type GalaxyStructure,
@@ -19,7 +20,7 @@ import {
   HOME_RADIUS_FRACTION,
 } from '../../gen/galaxy/structure';
 import type { GalaxyVisualOptions, IGalaxyVisual, Quality, VisualFrame } from '../contracts';
-import { type GalaxyCalibration, calibrate, populationColorInto } from './calibration';
+import { calibrate, type GalaxyCalibration, populationColorInto } from './calibration';
 import { GalaxyMap } from './GalaxyMap';
 import { GalaxyParticles } from './GalaxyParticles';
 import { GalaxyVolume } from './GalaxyVolume';
@@ -60,7 +61,11 @@ export class GalaxyVisual implements IGalaxyVisual {
   private readonly volume: GalaxyVolume;
   private readonly particles: GalaxyParticles;
   private calibration: GalaxyCalibration | null = null;
-  private calibratedFor = { brightness: Number.NaN, dustOpacity: Number.NaN, dustHeight: Number.NaN };
+  private calibratedFor = {
+    brightness: Number.NaN,
+    dustOpacity: Number.NaN,
+    dustHeight: Number.NaN,
+  };
   private readonly rgb = [0, 0, 0];
 
   constructor(model: GalaxyModel, quality: Quality) {
@@ -115,6 +120,29 @@ export class GalaxyVisual implements IGalaxyVisual {
   /** Dev check of the GPU map bake against the CPU model (see GalaxyMap.validate). */
   validateMap(frame: VisualFrame): { arm: number; dust: number } | null {
     return this.map.ready ? this.map.validate(frame.renderer) : null;
+  }
+
+  /**
+   * Suggested PostFX exposure for a camera at `cameraLy` (galactic ly) — optional; the contract
+   * keeps exposure at 1 unless the engine adapts it. A cheap geometric stand-in for auto-exposure:
+   * inside the disk the band needs ~`look.insideExposure`; a few kly above the disk (which then
+   * fills the view at grazing angles, ~1/sin(elevation) brighter) ~`look.aboveExposure`; far away
+   * 1. Blends smoothly (log-space) between these; engines should still ease it over time.
+   */
+  exposureHint(cameraLy: { x: number; y: number; z: number }): number {
+    const g = this.structure.gpu;
+    const rMax = g.radiusLy;
+    const hz = g.thinHeightLy;
+    const r = Math.hypot(cameraLy.x, cameraLy.z);
+    const ay = Math.abs(cameraLy.y);
+    const inDisk = 1 - smoothstep(0.9 * rMax, 1.2 * rMax, r);
+    const inside = inDisk * (1 - smoothstep(0.5 * hz, 3 * hz, ay));
+    const above =
+      (1 - smoothstep(rMax, 1.4 * rMax, r)) *
+      smoothstep(0.5 * hz, 3 * hz, ay) *
+      (1 - smoothstep(0.2 * rMax, rMax, ay));
+    const l = this.look;
+    return Math.exp(inside * Math.log(l.insideExposure) + above * Math.log(l.aboveExposure));
   }
 
   /** Dev: the volume pass's HDR radiance and distance (kly) at screen uv (see GalaxyVolume). */
@@ -237,7 +265,11 @@ export class GalaxyVisual implements IGalaxyVisual {
       .multiplyScalar(cal.dustKappa);
 
     const p = this.particles.uniforms;
-    p.uKindGain.value.set(l.particleGain, l.particleGain * l.clusterGain, l.particleGain * l.hiiGain);
+    p.uKindGain.value.set(
+      l.particleGain,
+      l.particleGain * l.clusterGain,
+      l.particleGain * l.hiiGain,
+    );
     p.uMinSigmaPx.value = l.minSigmaPx;
     p.uMaxSigmaPx.value = l.maxSigmaPx;
     return cal;
