@@ -50,6 +50,7 @@ const columns = Math.max(2, Number(params.get('cols') ?? 4));
 const specs = CELLS.slice(0, Math.max(1, Number(params.get('count') ?? CELLS.length)));
 const rows = Math.ceil(specs.length / columns);
 const showLabels = params.get('labels') !== '0';
+const hideShells = params.get('shells') === '0';
 
 const h = createHarness({
   title: 'Planet gallery',
@@ -116,7 +117,10 @@ for (const spec of specs) {
       THREE.MathUtils.degToRad((i * 67) % 360),
     ),
     label,
-    extent: Math.min(2.4, body.rings ? body.rings.outerRadiusKm / body.radiusKm : 1),
+    // Rings are part of the picture only when the shells are shown: size the disc to fit them.
+    extent: hideShells
+      ? 1
+      : Math.min(2.4, body.rings ? body.rings.outerRadiusKm / body.radiusKm : 1),
   });
 }
 
@@ -149,8 +153,6 @@ function layout(): void {
 }
 layout();
 window.addEventListener('resize', layout);
-
-const hideShells = params.get('shells') === '0';
 
 h.onFrame((f) => {
   for (const c of cells) {
