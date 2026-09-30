@@ -48,6 +48,13 @@ const ICONS = {
       <path d="M12 16.9h.01" strokeWidth="1.9" />
     </>
   ),
+  alert: (
+    <>
+      <circle cx="12" cy="12" r="8.6" />
+      <path d="M12 7.6v5.4" />
+      <path d="M12 16.5h.01" strokeWidth="1.9" />
+    </>
+  ),
   close: P('M6 6l12 12M18 6 6 18'),
   plus: P('M12 5v14M5 12h14'),
   minus: P('M5 12h14'),
@@ -100,7 +107,9 @@ const ICONS = {
       <path d="M12 8v4.2l2.9 1.7" />
     </>
   ),
-  sparkle: P('M12 3.4c.6 4.7 1.9 6 6.6 6.6-4.7.6-6 1.9-6.6 6.6-.6-4.7-1.9-6-6.6-6.6 4.7-.6 6-1.9 6.6-6.6Z'),
+  sparkle: P(
+    'M12 3.4c.6 4.7 1.9 6 6.6 6.6-4.7.6-6 1.9-6.6 6.6-.6-4.7-1.9-6-6.6-6.6 4.7-.6 6-1.9 6.6-6.6Z',
+  ),
   home: (
     <>
       <path d="M4.4 11.2 12 4.6l7.6 6.6" />
@@ -163,7 +172,10 @@ const ICONS = {
   shutter: (
     <>
       <circle cx="12" cy="12" r="8.4" />
-      <path d="m12 3.6 3.6 6.2M20.2 9.6l-7.2.1M18.4 17.4 14.9 11M8.4 20.1l3.6-6.2M3.8 14.4l7.2-.1M5.6 6.6 9.1 13" opacity=".7" />
+      <path
+        d="m12 3.6 3.6 6.2M20.2 9.6l-7.2.1M18.4 17.4 14.9 11M8.4 20.1l3.6-6.2M3.8 14.4l7.2-.1M5.6 6.6 9.1 13"
+        opacity=".7"
+      />
     </>
   ),
   eye: (
@@ -219,7 +231,14 @@ export function Icon({ name, size = 18, filled = false, ...rest }: IconProps) {
 /** The Sidereal mark: an armillary ring with cardinal ticks and a four-point star. */
 export function LogoMark({ size = 26 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+    >
       <circle cx="16" cy="16" r="12.6" stroke="currentColor" strokeWidth="0.9" opacity="0.75" />
       <path
         d="M16 1.6v4M16 26.4v4M1.6 16h4M26.4 16h4"

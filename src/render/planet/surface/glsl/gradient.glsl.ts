@@ -27,4 +27,24 @@ vec3 heightGradient(vec2 uv, float du) {
   vec3 rb = cross(p0, a);
   return (hu * ra + hv * rb) / dot(a, ra);
 }
+
+/**
+ * Multi-scale cavity in height units: how far the texel sits below the mean of a ring of neighbours at 4,
+ * 12 and 36 texels. Bowls are positive, crests negative. Baked into the albedo as ambient occlusion so
+ * craters and valleys read even when the sun is behind the camera.
+ */
+float cavity(vec2 uv, float h0) {
+  float d = 8.0 / uSize;
+  float acc = 0.0;
+  for (int s = 0; s < 3; s++) {
+    float m = 0.25 * (
+      texture(uHeightTex, cubeDir(uFace, uv + vec2(d, 0.0))).r +
+      texture(uHeightTex, cubeDir(uFace, uv - vec2(d, 0.0))).r +
+      texture(uHeightTex, cubeDir(uFace, uv + vec2(0.0, d))).r +
+      texture(uHeightTex, cubeDir(uFace, uv - vec2(0.0, d))).r);
+    acc += m - h0;
+    d *= 3.0;
+  }
+  return acc / 3.0;
+}
 `;

@@ -17,10 +17,10 @@
  * system), so arriving 10⁴ km above a planet after crossing 50 ly is free of jitter.
  */
 import { Quaternion, Vector3 } from 'three';
-import { smoothstep, smootherstep } from '../../core/math';
+import { smootherstep, smoothstep } from '../../core/math';
 import type { FocusHandle } from './focus';
-import { type OrbitPose, orbitQuaternion } from './framing';
 import { relativeKm } from './frames';
+import { type OrbitPose, orbitQuaternion } from './framing';
 import { ZoomPanPath } from './vanWijkNuij';
 
 /** Duration per unit of path length S (the paper's "perceived distance"). */

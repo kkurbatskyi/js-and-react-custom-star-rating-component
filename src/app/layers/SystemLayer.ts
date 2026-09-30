@@ -8,8 +8,8 @@
  * the system radius exactly as the starfield hides the star's point (hand-off without a pop).
  */
 import { type PerspectiveCamera, Quaternion, Scene, Vector3 } from 'three';
-import { smoothstep } from '../../core/math';
 import { formatDistanceKm } from '../../core/format';
+import { smoothstep } from '../../core/math';
 import {
   type FrameInfo,
   type LabelSpec,
@@ -114,7 +114,14 @@ export class SystemLayer implements Layer {
     const dStar = camS.length();
     const rStar = system.star.radiusKm;
     this.starIntensity = smoothstep(system.radiusKm, 0.6 * system.radiusKm, dStar);
-    this.starVisible = projectRelative(this.starRel, camera, width, height, this.scratch, this.starScreen);
+    this.starVisible = projectRelative(
+      this.starRel,
+      camera,
+      width,
+      height,
+      this.scratch,
+      this.starScreen,
+    );
     this.starRadiusPx = (rStar / Math.max(dStar, rStar)) * ppr;
 
     // Which bodies does the planet layer own this frame?
@@ -149,7 +156,12 @@ export class SystemLayer implements Layer {
     // Orbits and belts fade in with the star as the camera enters the system.
     const o = this.orbitOptions;
     o.eclipticToWorld = assets.frame;
-    o.opacity = this.ctx.orbitOpacity() * this.starIntensity;
+    // Close to a body its orbit is a straight line slicing the view: fade orbits inside the zone.
+    const nearBody =
+      anchor.body && anchor.starId === system.id
+        ? smoothstep(0.5 * anchor.planetZoneKm, 2 * anchor.planetZoneKm, frame.cam.focusDistanceKm)
+        : 1;
+    o.opacity = this.ctx.orbitOpacity() * this.starIntensity * nearBody;
     o.simDays = frame.simDays;
     const sel = this.ctx.selectedId();
     o.highlightId = sel !== null && assets.indexOf(sel) >= 0 ? sel : (anchor.body?.id ?? null);
@@ -205,11 +217,19 @@ export class SystemLayer implements Layer {
       const d = Math.max(0, Math.hypot(b.screenX - x, b.screenY - y) - b.radiusPx) + handicap;
       if (d <= bestD) {
         bestD = d;
-        best = { ref: { kind: b.moon ? 'moon' : 'planet', id: b.id }, distPx: d, x: b.screenX, y: b.screenY };
+        best = {
+          ref: { kind: b.moon ? 'moon' : 'planet', id: b.id },
+          distPx: d,
+          x: b.screenX,
+          y: b.screenY,
+        };
       }
     }
     if (this.starVisible && this.starIntensity > 0.2) {
-      const d = Math.max(0, Math.hypot(this.starScreen.x - x, this.starScreen.y - y) - Math.max(this.starRadiusPx, 6));
+      const d = Math.max(
+        0,
+        Math.hypot(this.starScreen.x - x, this.starScreen.y - y) - Math.max(this.starRadiusPx, 6),
+      );
       if (d <= bestD) {
         best = {
           ref: { kind: 'star', id: assets.system.id },
@@ -252,13 +272,22 @@ export class SystemLayer implements Layer {
       if (b.owner !== 'system' || !b.onScreen) continue;
       const important = b.id === sel || b.id === this.focusId || b.id === this.destinationId;
       if (b.moon && !important) {
-        if (Math.hypot(b.screenX - parentX, b.screenY - parentY) < MOON_LABEL_SEPARATION_PX) continue;
+        if (Math.hypot(b.screenX - parentX, b.screenY - parentY) < MOON_LABEL_SEPARATION_PX)
+          continue;
       }
       const base = b.moon ? LabelTier.moon : LabelTier.planet;
       const rank = Math.min(998, Math.round(Math.log10(b.body.radiusKm) * 150));
       const marker = b.id === sel ? 'ring' : b.radiusPx < 3 ? 'dot' : null;
       const sub = important ? formatDistanceKm(b.rel.length()) : undefined;
-      out.push(bodyLabel(labelAt(this.labelPool, slot++), b, this.tier(b.id, sel, base) * 1000 + rank, marker, sub));
+      out.push(
+        bodyLabel(
+          labelAt(this.labelPool, slot++),
+          b,
+          this.tier(b.id, sel, base) * 1000 + rank,
+          marker,
+          sub,
+        ),
+      );
     }
   }
 
@@ -301,7 +330,11 @@ export class SystemLayer implements Layer {
     this.active = false;
     const assets = this.assets;
     if (!assets) return;
-    for (const obj of [assets.star.object, assets.orbitLines.object, ...assets.belts.map((b) => b.object)]) {
+    for (const obj of [
+      assets.star.object,
+      assets.orbitLines.object,
+      ...assets.belts.map((b) => b.object),
+    ]) {
       if (obj.parent === this.scene) this.scene.remove(obj);
     }
     for (const b of assets.bodies) {

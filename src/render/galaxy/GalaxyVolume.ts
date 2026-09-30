@@ -36,8 +36,12 @@ import { compositeFragment, fullScreenVertex, marchFragment, resolveFragment } f
 /** Weight of the newest frame once the history has converged (≈ 1 / effective sample count). */
 const MIN_BLEND = 0.1;
 
-function makeTarget(filter: typeof LinearFilter | typeof NearestFilter): WebGLRenderTarget {
+function makeTarget(
+  filter: typeof LinearFilter | typeof NearestFilter,
+  count = 1,
+): WebGLRenderTarget {
   return new WebGLRenderTarget(1, 1, {
+    count,
     type: HalfFloatType,
     format: RGBAFormat,
     minFilter: filter,
@@ -70,6 +74,8 @@ export class GalaxyVolume {
     uColThinInner: new Uniform(new Vector3()),
     uColThick: new Uniform(new Vector3()),
     uColArm: new Uniform(new Vector3()),
+    uColArmInner: new Uniform(new Vector3()),
+    uArmDetail: new Uniform(new Vector2()),
     uColSpheroid: new Uniform(new Vector3()),
     uColHii: new Uniform(new Vector3()),
     uMottle: new Uniform(0),
@@ -85,7 +91,8 @@ export class GalaxyVolume {
   private readonly resolveScene = new Scene();
   private readonly marchMaterial: ShaderMaterial;
   private readonly resolveMaterial: ShaderMaterial;
-  private readonly marchTarget = makeTarget(NearestFilter);
+  /** textures[0]: radiance + distance; textures[1]: dust optical-depth guide. */
+  private readonly marchTarget = makeTarget(NearestFilter, 2);
   private readonly history = [makeTarget(LinearFilter), makeTarget(LinearFilter)] as const;
   private readonly resolveUniforms = {
     uCurrent: new Uniform(this.marchTarget.texture),
@@ -96,8 +103,13 @@ export class GalaxyVolume {
   };
   private readonly compositeUniforms = {
     uVolume: new Uniform(this.history[0].texture),
+    uGuide: new Uniform(this.marchTarget.textures[1] ?? null),
+    uPixelAngleFull: new Uniform(1e-3),
+    uGuided: new Uniform(1),
     uGain: new Uniform(1),
   };
+  /** Dust-guided upsampling (off: plain bilinear, cheaper). */
+  guided = true;
   private current = 0;
   private accumulated = 0;
   private frameIndex = 0;
@@ -140,7 +152,14 @@ export class GalaxyVolume {
         ...common,
         vertexShader: fullScreenVertex,
         fragmentShader: compositeFragment,
-        uniforms: this.compositeUniforms,
+        uniforms: {
+          ...fields,
+          ...this.compositeUniforms,
+          uCameraLy: this.uniforms.uCameraLy,
+          uCamRot: this.uniforms.uCamRot,
+          uProjInv: this.uniforms.uProjInv,
+          uBoundR: this.uniforms.uBoundR,
+        },
         blending: AdditiveBlending,
         transparent: true,
       }),
@@ -205,8 +224,11 @@ export class GalaxyVolume {
     renderer.setRenderTarget(previous);
     this.current = next;
 
-    this.compositeUniforms.uVolume.value = write.texture;
-    this.compositeUniforms.uGain.value = gain;
+    const c = this.compositeUniforms;
+    c.uVolume.value = write.texture;
+    c.uGain.value = gain;
+    c.uGuided.value = this.guided ? 1 : 0;
+    c.uPixelAngleFull.value = 2 / ((cam.projectionMatrix.elements[5] ?? 1) * this.bufferSize.y);
     r.uPrevViewProj.value.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
     this.prevCameraLy.copy(cameraLy);
     this.hasPrevious = true;

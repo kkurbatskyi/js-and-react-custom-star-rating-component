@@ -8,8 +8,8 @@
  */
 import { Vector3 } from 'three';
 import type { FocusTarget, SelectionRef } from '../core/types';
-import { arrivalPose, type OrbitPose } from '../engine/camera/framing';
 import { relativeKm } from '../engine/camera/frames';
+import { arrivalPose, type OrbitPose } from '../engine/camera/framing';
 import type { Engine } from '../engine/Engine';
 import { store } from '../state/store';
 import type { Universe } from '../universe/contracts';
@@ -51,7 +51,8 @@ declare global {
 
 function toTarget(t: FocusTarget | string): FocusTarget | null {
   if (typeof t !== 'string') return t;
-  if (t === 'galaxy' || t === 'centre' || t === 'center') return { kind: 'galaxy', centerLy: [0, 0, 0] };
+  if (t === 'galaxy' || t === 'centre' || t === 'center')
+    return { kind: 'galaxy', centerLy: [0, 0, 0] };
   return parseDeepLink(t)?.target ?? null;
 }
 
@@ -77,7 +78,12 @@ export function installDebugHandle(engine: Engine, sync: StoreSync): SiderealHan
       handle.update(engine.clock.simDays);
       const dir = relativeKm(engine.rig.anchor, handle, new Vector3()).add(engine.rig.offsetKm);
       if (dir.lengthSq() === 0) dir.set(0, 0, 1);
-      const p = arrivalPose(handle, dir.normalize(), { yaw: 0, pitch: 0, distanceKm: 1 });
+      const p = arrivalPose(
+        handle,
+        dir.normalize(),
+        { yaw: 0, pitch: 0, distanceKm: 1 },
+        engine.rig.viewAspect,
+      );
       engine.rig.jumpTo(handle, engine.clock.simDays, {
         yaw: pose?.yaw ?? p.yaw,
         pitch: pose?.pitch ?? p.pitch,
@@ -106,7 +112,8 @@ export function installDebugHandle(engine: Engine, sync: StoreSync): SiderealHan
     },
     select(t) {
       const target = t === null ? null : toTarget(t);
-      const ref: SelectionRef | null = target && target.kind !== 'galaxy' ? { kind: target.kind, id: target.id } : null;
+      const ref: SelectionRef | null =
+        target && target.kind !== 'galaxy' ? { kind: target.kind, id: target.id } : null;
       store.getState().select(ref);
     },
     state() {

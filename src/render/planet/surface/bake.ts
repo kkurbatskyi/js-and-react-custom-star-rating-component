@@ -31,14 +31,24 @@ import {
   WebGLCubeRenderTarget,
   type WebGLRenderer,
 } from 'three';
-import { type RockyLook, STYLE_ID, EMISSIVE_ID } from '../appearance';
 import { common } from '../../shaders/common.glsl';
 import { noise } from '../../shaders/noise.glsl';
+import { EMISSIVE_ID, type RockyLook, type RockyStyle, STYLE_ID } from '../appearance';
 import { bakeAlbedoGlsl } from './glsl/bakeAlbedo.glsl';
 import { bakeReliefGlsl } from './glsl/bakeRelief.glsl';
 import { bakeTerrainGlsl } from './glsl/bakeTerrain.glsl';
 import { cubeGlsl } from './glsl/cube.glsl';
 import { gradientGlsl } from './glsl/gradient.glsl';
+
+/** Strength of the baked cavity occlusion per style (see gradient.glsl.ts). */
+const CAVITY_AO: Readonly<Record<RockyStyle, number>> = {
+  biome: 0.25,
+  regolith: 0.7,
+  desert: 0.4,
+  icy: 0.3,
+  volcanic: 0.4,
+  dwarf: 0.5,
+};
 
 const FULLSCREEN_VERT = /* glsl */ `
 void main() {
@@ -53,8 +63,12 @@ const reliefFrag = `${common}\n${noise}\n${cubeGlsl}\n${gradientGlsl}\n${bakeRel
 type Pass = 'terrain' | 'albedo' | 'relief';
 type Phase = 'init' | 'compile' | Pass | 'albedoMips' | 'reliefMips' | 'done';
 
-/** Conservative first guess (ms per row of a 256-wide face) before the first measurement. */
+/** Rows rendered by the first strip of a pass, before any cost measurement exists. */
 const INITIAL_ROWS = 4;
+/** Hard cap on the pixels of one strip, whatever the cost estimate says (guards against a lying clock). */
+const MAX_JOB_PIXELS = 131_072;
+/** A strip may grow by at most this factor over the previous one, so a low estimate cannot overshoot. */
+const MAX_GROWTH = 2;
 
 export interface BakeResult {
   albedo: WebGLCubeRenderTarget;
@@ -101,10 +115,13 @@ export class SurfaceBaker {
   private camera: OrthographicCamera | null = null;
   private readonly meshes = new Map<Pass, Mesh<PlaneGeometry, ShaderMaterial>>();
   private geometry: PlaneGeometry | null = null;
+  private lastRows = INITIAL_ROWS;
   private compileDone = false;
   private compileStarted = false;
   /** Estimated milliseconds per row, per pass (exponential moving average). */
   private readonly msPerRow: Record<Pass, number> = { terrain: 0, albedo: 0, relief: 0 };
+  private readonly floatProbe = new Float32Array(4);
+  private readonly byteProbe = new Uint8Array(4);
   private disposed = false;
 
   constructor(look: RockyLook, size: number) {
@@ -114,7 +131,16 @@ export class SurfaceBaker {
 
   /** 0..1 progress (for dev UIs). */
   get progress(): number {
-    const order: Phase[] = ['init', 'compile', 'terrain', 'albedo', 'albedoMips', 'relief', 'reliefMips', 'done'];
+    const order: Phase[] = [
+      'init',
+      'compile',
+      'terrain',
+      'albedo',
+      'albedoMips',
+      'relief',
+      'reliefMips',
+      'done',
+    ];
     const weights = [0, 0.05, 0.45, 0.2, 0.02, 0.06, 0.02, 0];
     let p = 0;
     const idx = order.indexOf(this.phase);
@@ -230,7 +256,10 @@ export class SurfaceBaker {
     const c = look.colors;
     const lut = [...look.climate.lut];
     while (lut.length < 17) lut.push(lut[lut.length - 1] ?? 288);
-    const make = (fragmentShader: string, uniforms: Record<string, { value: unknown }>): ShaderMaterial =>
+    const make = (
+      fragmentShader: string,
+      uniforms: Record<string, { value: unknown }>,
+    ): ShaderMaterial =>
       new ShaderMaterial({
         glslVersion: GLSL3,
         vertexShader: FULLSCREEN_VERT,
@@ -265,6 +294,7 @@ export class SurfaceBaker {
       uIceTemp: { value: look.climate.iceTempK },
       uLapse: { value: look.climate.lapseK },
       uEmissiveKind: { value: EMISSIVE_ID[look.emissive.kind] },
+      uAo: { value: CAVITY_AO[look.style] },
     });
     const relief = make(reliefFrag, {
       uFace: { value: 0 },
@@ -327,15 +357,21 @@ export class SurfaceBaker {
 
   private runStrip(renderer: WebGLRenderer, pass: Pass, remainingMs: number): void {
     const mesh = this.meshes.get(pass);
-    const target = pass === 'terrain' ? this.heightRT : pass === 'albedo' ? this.albedoRT : this.reliefRT;
+    const target =
+      pass === 'terrain' ? this.heightRT : pass === 'albedo' ? this.albedoRT : this.reliefRT;
     if (!mesh || !target || !this.scene || !this.camera) return;
     const n = this.size;
     const est = this.msPerRow[pass];
+    const cap = Math.min(
+      Math.max(4, Math.floor(MAX_JOB_PIXELS / n)),
+      Math.ceil(this.lastRows * MAX_GROWTH),
+    );
     const rows =
       est <= 0
         ? INITIAL_ROWS
-        : Math.max(1, Math.min(n - this.row, Math.floor(Math.max(remainingMs, 0) / est)));
+        : Math.max(1, Math.min(cap, Math.floor(Math.max(remainingMs, 0) / est)));
     const h = Math.min(rows, n - this.row);
+    this.lastRows = Math.max(h, INITIAL_ROWS);
 
     for (const [p, m] of this.meshes) m.visible = p === pass;
     const u = mesh.material.uniforms;
@@ -346,7 +382,7 @@ export class SurfaceBaker {
     renderer.setRenderTarget(target, this.face);
     const t0 = performance.now();
     renderer.render(this.scene, this.camera);
-    renderer.getContext().finish(); // include the GPU's time in the measurement
+    this.sync(renderer, target === this.heightRT);
     const dt = performance.now() - t0;
     const perRow = dt / h;
     this.msPerRow[pass] = est <= 0 ? perRow : est * 0.6 + perRow * 0.4;
@@ -362,6 +398,19 @@ export class SurfaceBaker {
         else this.phase = 'reliefMips';
       }
     }
+  }
+
+  /**
+   * Wait for the GPU to finish the strip just drawn, so the cost measurement includes its work and the
+   * bake never queues more than a budget's worth. `finish()` alone is a no-op on some drivers; reading one
+   * pixel back cannot return before the draw has completed.
+   */
+  private sync(renderer: WebGLRenderer, floatTarget: boolean): void {
+    const gl = renderer.getContext();
+    gl.finish();
+    if (floatTarget) gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, this.floatProbe);
+    else gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, this.byteProbe);
+    gl.getError(); // clear any 'not readable' error so it never surfaces in three's checks
   }
 
   /** Build the mip chain once: flip `generateMipmaps` on for one (empty) render, then off again. */

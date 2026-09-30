@@ -1,14 +1,12 @@
 /**
- * Global keyboard shortcuts, installed once by App in the CAPTURE phase. The engine also listens for
- * keys (Esc = up a level), so anything the UI consumes is stopped before it gets there: closing the
- * search palette with Esc must not also fly you up a level.
+ * The UI's global keyboard shortcuts, installed once by App in the CAPTURE phase. The engine owns the
+ * camera and clock keys (src/engine/input/keys.ts: arrows/WASD, + −, F, Space, H, [ ]) and also
+ * listens for Esc ("up a level"), so anything the UI consumes is stopped before it gets there: closing
+ * the search palette with Esc must not also fly you up a level.
  *
- *   Esc            close the top-most thing (photo preview → dialog → photo mode); else falls through
- *   ⌘/Ctrl+K  /    search          ?  help       L  logbook       M  mute
- *   H              toggle photo mode (P enters it)
- *   Space          pause / resume time      ,  .  slower / faster
+ *   Esc          close the top-most thing (photo preview → dialog → photo mode); else the engine's
+ *   ⌘/Ctrl+K  /  search        ?  help        L  logbook        M  mute
  */
-import { stepTimeScale } from '../../sim/time';
 import { store } from '../../state/store';
 import { anyPanelOpen, closePanels, openPanel, togglePanel } from './panels';
 import { usePhotoStore } from './photoStore';
@@ -32,22 +30,8 @@ export function closeTopmost(): boolean {
   return false;
 }
 
-const TEXT_INPUT = 'input:not([type="checkbox"]):not([type="range"]):not([type="radio"]), textarea, select, [contenteditable=""], [contenteditable="true"]';
-const ACTIVATES_ON_SPACE = 'button, a[href], summary, [role="radio"], [role="tab"], [role="switch"], [role="option"], input, select, textarea';
-
-function changeSpeed(direction: 1 | -1): void {
-  const s = store.getState();
-  if (direction > 0) {
-    if (s.paused) s.togglePause();
-    else s.setTimeScale(stepTimeScale(s.timeScale === 0 ? 1 : s.timeScale, 1));
-    return;
-  }
-  if (s.paused) return;
-  const next = stepTimeScale(s.timeScale, -1);
-  if (next <= 0) s.togglePause();
-  else s.setTimeScale(next);
-}
-
+const TEXT_INPUT =
+  'input:not([type="checkbox"]):not([type="range"]):not([type="radio"]), textarea, select, [contenteditable=""], [contenteditable="true"]';
 export function handleKeyDown(e: KeyboardEvent): void {
   const s = store.getState();
   const target = e.target instanceof Element ? e.target : null;
@@ -86,31 +70,6 @@ export function handleKeyDown(e: KeyboardEvent): void {
     case 'M':
       consume();
       s.updateSettings({ audio: !s.settings.audio });
-      return;
-    case 'h':
-    case 'H':
-      if (anyPanelOpen()) return;
-      consume();
-      s.setPhotoMode(!s.ui.photoMode);
-      return;
-    case 'p':
-    case 'P':
-      if (anyPanelOpen()) return;
-      consume();
-      s.setPhotoMode(true);
-      return;
-    case ' ':
-      if (target?.closest(ACTIVATES_ON_SPACE) || anyPanelOpen()) return;
-      consume();
-      s.togglePause();
-      return;
-    case ',':
-      consume();
-      changeSpeed(-1);
-      return;
-    case '.':
-      consume();
-      changeSpeed(1);
       return;
   }
 }

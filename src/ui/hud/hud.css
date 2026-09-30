@@ -15,6 +15,10 @@
 .sd-time__step {
   display: flex;
   align-items: center;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 .sd-time__speed {
   display: grid;
@@ -59,6 +63,7 @@
 }
 .sd-time__now {
   width: auto;
+  min-width: var(--sd-hit);
   gap: 6px;
   padding: 0 10px 0 8px;
 }
@@ -129,8 +134,11 @@
 }
 .sd-minimap__map {
   position: relative;
+  display: block;
   width: var(--sd-map);
   height: var(--sd-map);
+  padding: 0;
+  border: 0;
   overflow: hidden;
   background: var(--sd-ink);
   border-radius: var(--sd-r-1);
@@ -289,9 +297,9 @@
   position: absolute;
   z-index: var(--sd-z-toast);
   top: calc(var(--sd-topbar-h) + 6px);
-  left: 50%;
+  left: calc((100% - var(--sd-right-inset)) / 2);
   transform: translateX(-50%);
-  width: min(420px, calc(100% - 2 * var(--sd-inset)));
+  width: min(420px, calc(100% - var(--sd-right-inset) - 2 * var(--sd-inset)));
   display: grid;
   gap: var(--sd-s-2);
   margin: 0;

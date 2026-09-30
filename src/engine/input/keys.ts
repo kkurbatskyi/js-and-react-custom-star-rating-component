@@ -8,8 +8,20 @@
  * The UI owns ⌘K and / (search). Keys are ignored while the user types in a field.
  */
 
-export type HeldAction = 'orbit-left' | 'orbit-right' | 'orbit-up' | 'orbit-down' | 'zoom-in' | 'zoom-out';
-export type PressAction = 'up-level' | 'fly-selection' | 'toggle-pause' | 'photo-mode' | 'slower' | 'faster';
+export type HeldAction =
+  | 'orbit-left'
+  | 'orbit-right'
+  | 'orbit-up'
+  | 'orbit-down'
+  | 'zoom-in'
+  | 'zoom-out';
+export type PressAction =
+  | 'up-level'
+  | 'fly-selection'
+  | 'toggle-pause'
+  | 'photo-mode'
+  | 'slower'
+  | 'faster';
 
 export interface KeyLike {
   key: string;

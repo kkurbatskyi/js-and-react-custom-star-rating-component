@@ -4,12 +4,6 @@
  *   display  Cormorant Garamond 500 / 600 / 500 italic — names, wordmark, small caps, prose
  *   ui       IBM Plex Sans 400 / 500
  *   data     IBM Plex Mono 400 / 500 — tabular numerals
- * Imported once, by App.
+ * The @font-face rules live in fonts.css (woff2 only, from @fontsource's files). Imported once, by App.
  */
-import '@fontsource/cormorant-garamond/latin-500.css';
-import '@fontsource/cormorant-garamond/latin-600.css';
-import '@fontsource/cormorant-garamond/latin-500-italic.css';
-import '@fontsource/ibm-plex-sans/latin-400.css';
-import '@fontsource/ibm-plex-sans/latin-500.css';
-import '@fontsource/ibm-plex-mono/latin-400.css';
-import '@fontsource/ibm-plex-mono/latin-500.css';
+import './fonts.css';

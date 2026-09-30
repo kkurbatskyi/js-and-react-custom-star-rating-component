@@ -10,15 +10,25 @@
  */
 import * as THREE from 'three';
 import { blackbodyRGB } from '../src/core/color';
-import { bodyOrientation } from '../src/sim/orientation';
+import type { BodyBase } from '../src/core/types';
 import type { PlanetUniforms } from '../src/render/contracts';
 import { PlanetVisual } from '../src/render/planet/PlanetVisual';
+import { bodyOrientation } from '../src/sim/orientation';
 import { createHarness } from './harness';
 import { pickBody } from './planetBodies';
 
 const params = new URLSearchParams(location.search);
 const picked = pickBody(params);
-const { body, system } = picked;
+const { system } = picked;
+// ?nightlights=0.8 forces a civilisation's night lights on the picked world (none nearby to pick from).
+const forcedLights = params.get('nightlights');
+const body: BodyBase = forcedLights
+  ? {
+      ...picked.body,
+      life: 'civilization',
+      appearance: { ...picked.body.appearance, nightLights: Number(forcedLights) },
+    }
+  : picked.body;
 const R = body.radiusKm;
 
 const view = params.get('view') ?? 'mid';
@@ -58,6 +68,13 @@ if (params.get('shells') === '0') {
   for (const child of visual.object.children) if (child.name !== 'surface') child.visible = false;
 }
 
+const DEBUG_VIEWS: Record<string, number> = {
+  albedo: 1,
+  normal: 2,
+  height: 3,
+  shadow: 4,
+  diffuse: 5,
+};
 const sunParam = (params.get('sun') ?? '').split(',').map(Number);
 const ctl = {
   sunAz: Number.isFinite(sunParam[0]) && params.has('sun') ? (sunParam[0] as number) : preset.az,
@@ -65,19 +82,28 @@ const ctl = {
   spin: Number(params.get('spin') ?? 0),
   intensity: 1,
   sunIntensity: 1,
-  debug: params.get('debug') === 'albedo' ? 1 : params.get('debug') === 'normal' ? 2 : params.get('debug') === 'height' ? 3 : 0,
+  debug: DEBUG_VIEWS[params.get('debug') ?? ''] ?? 0,
 };
 h.gui.add(ctl, 'sunAz', -180, 180, 1).name('sun azimuth');
 h.gui.add(ctl, 'sunEl', -80, 80, 1).name('sun elevation');
 h.gui.add(ctl, 'spin', 0, 360, 1).name('spin (deg)');
 h.gui.add(ctl, 'sunIntensity', 0.4, 2, 0.01).name('sun intensity');
 h.gui.add(ctl, 'intensity', 0, 1.5, 0.01).name('fade / intensity');
-h.gui.add(ctl, 'debug', { shaded: 0, albedo: 1, normal: 2, height: 3 }).onChange((v: number) => visual.setDebug(v));
+h.gui.add(ctl, 'debug', { shaded: 0, ...DEBUG_VIEWS }).onChange((v: number) => visual.setDebug(v));
 visual.setDebug(ctl.debug);
 
 const star = system.star;
 const sunColor = new THREE.Color().setRGB(...blackbodyRGB(star.temperatureK));
-const sunAngular = Math.atan(star.radiusSolar * 695_700 / (Math.max(body.orbit.semiMajorAxisKm, 1) * (picked.planetIndex >= 0 ? 1 : 1)));
+// Distance to the star: a planet's own orbit, or (for a moon) its parent planet's.
+const parentPlanet =
+  picked.planetIndex >= 0
+    ? body
+    : system.planets.find((p) => p.moons.some((m) => m.id === body.id));
+const starDistanceKm = Math.max(
+  parentPlanet?.orbit.semiMajorAxisKm ?? body.orbit.semiMajorAxisKm,
+  1,
+);
+const sunAngular = Math.atan((star.radiusSolar * 695_700) / starDistanceKm);
 
 const q = new THREE.Quaternion();
 const spinQ = new THREE.Quaternion();
@@ -95,7 +121,10 @@ const u: PlanetUniforms = {
   intensity: 1,
 };
 
-const moon = 'moons' in body && Array.isArray((body as { moons?: unknown[] }).moons) ? (body as unknown as { moons: { radiusKm: number }[] }).moons[0] : undefined;
+const moon =
+  'moons' in body && Array.isArray((body as { moons?: unknown[] }).moons)
+    ? (body as unknown as { moons: { radiusKm: number }[] }).moons[0]
+    : undefined;
 const occluderPos = new THREE.Vector3();
 if (params.get('moon') === '1' && moon) {
   u.occluders = [{ positionKm: occluderPos, radiusKm: moon.radiusKm }];
@@ -123,13 +152,22 @@ h.onFrame((f) => {
   u.sunAngularRadiusRad = Math.max(sunAngular, 0.002);
   if (u.occluders) {
     // Park the moon between the sun and the planet's limb, so the eclipse shadow falls on the disc.
-    occluderPos.copy(sunDir).multiplyScalar(R * 4).addScaledVector(right, R * 0.35).addScaledVector(up, R * -0.1);
+    occluderPos
+      .copy(sunDir)
+      .multiplyScalar(R * 4)
+      .addScaledVector(right, R * 0.35)
+      .addScaledVector(up, R * -0.1);
   }
   visual.update(f, u);
 });
 
 /** Area-weighted coverage of the baked surface: ocean (height below sea level) and ice, read back from the cubes. */
-function coverage(): { ocean: number; ice: number; lava: number; target: { ocean: number; ice: number } } | null {
+function coverage(): {
+  ocean: number;
+  ice: number;
+  lava: number;
+  target: { ocean: number; ice: number };
+} | null {
   const cubes = visual.bakedCubes();
   if (!cubes) return null;
   const n = cubes.relief.width;
@@ -151,7 +189,7 @@ function coverage(): { ocean: number; ice: number; lava: number; target: { ocean
         wSum += w;
         if (((relief[k + 3] ?? 0) / 255) * 2 - 0.75 < 0) ocean += w;
         const a = (albedo[k + 3] ?? 128) / 255;
-        if (a < 0.45) ice += w;
+        ice += w * Math.max(0, 0.5 - a) * 2;
         if (a > 0.6) lava += w;
       }
     }
@@ -165,12 +203,30 @@ function coverage(): { ocean: number; ice: number; lava: number; target: { ocean
 }
 window.__COVERAGE__ = coverage;
 
-void h.prepare(visual, 10);
+// Time-slicing statistics of the bake (calls, longest call, total): window.__PREP__.
+const prep = { calls: 0, maxMs: 0, totalMs: 0, budgetMs: 10 };
+window.__PREP__ = prep;
+const bake = { prepare: visual.prepare.bind(visual) };
+void h.prepare(
+  {
+    prepare: (renderer, budgetMs) => {
+      const t0 = performance.now();
+      const done = bake.prepare(renderer, budgetMs);
+      const dt = performance.now() - t0;
+      prep.calls++;
+      prep.totalMs += dt;
+      prep.maxMs = Math.max(prep.maxMs, dt);
+      return done;
+    },
+  },
+  prep.budgetMs,
+);
 h.start();
 
 declare global {
   interface Window {
     __PLANET__?: PlanetVisual;
     __COVERAGE__?: () => ReturnType<typeof coverage>;
+    __PREP__?: { calls: number; maxMs: number; totalMs: number; budgetMs: number };
   }
 }

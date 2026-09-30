@@ -26,7 +26,7 @@ float orenNayar(float ndl, float ndv, vec3 n, vec3 l, vec3 v, float sigma) {
  * at high phase. Brightness stays flat across the disk at full phase, like the full Moon.
  */
 float lunarLambert(float mu0, float mu, float phaseAngle) {
-  float L = 1.0 - smoothstep(0.0, 2.2, phaseAngle);
+  float L = 1.0 - smoothstep(0.0, 1.4, phaseAngle);
   return mu0 * (2.0 * L / max(mu0 + mu, 1e-3) + (1.0 - L));
 }
 

@@ -3,8 +3,6 @@
  * the Milky-Way-like sky from inside the disk. Always active: it is the sky.
  */
 import { type PerspectiveCamera, Scene, Vector3 } from 'three';
-import { smoothstep } from '../../core/math';
-import { KM_PER_LY } from '../../core/units';
 import type { FrameInfo, LabelSpec, Layer, LayerRenderSpec } from '../../engine/contracts';
 import { LabelTier } from '../../engine/contracts';
 import type {
@@ -15,6 +13,7 @@ import type {
 } from '../../render/contracts';
 import { GalaxyVisual } from '../../render/galaxy/GalaxyVisual';
 import type { Universe } from '../../universe/contracts';
+import { setStarRef } from './bodies';
 import {
   createVisualFrame,
   type LayerContext,
@@ -25,6 +24,8 @@ import {
 
 /** Galaxy particles closer than this fade out; the starfield resolves individual stars there. */
 const NEAR_FADE_LY = 1200;
+/** Galaxy-scale labels (core, home) only from at least this far away, ly. */
+const FEATURE_LABEL_MIN_LY = 4000;
 
 export class GalaxyLayer implements Layer {
   readonly id = 'galaxy';
@@ -45,7 +46,6 @@ export class GalaxyLayer implements Layer {
   private readonly rel = new Vector3();
   private readonly scratch = new Vector3();
   private readonly screen: ScreenPoint = { x: 0, y: 0, depth: 0 };
-  private labelAlpha = 0;
   private camera: PerspectiveCamera | null = null;
   private width = 1;
   private height = 1;
@@ -72,8 +72,6 @@ export class GalaxyLayer implements Layer {
 
     this.visual.update(syncVisualFrame(this.vframe, frame, camera), this.options);
 
-    // Galaxy-scale labels fade in once the camera is well outside the disk's neighbourhood.
-    this.labelAlpha = smoothstep(4000, 12000, frame.cam.focusDistanceKm / KM_PER_LY);
     this.camera = camera;
     this.width = frame.width;
     this.height = frame.height;
@@ -81,13 +79,25 @@ export class GalaxyLayer implements Layer {
   }
 
   labels(out: LabelSpec[]): void {
-    if (this.labelAlpha < 0.5 || !this.camera || !this.ctx.labelsEnabled()) return;
+    if (!this.camera || !this.ctx.labelsEnabled()) return;
     const u = this.universe;
-    this.pushLabel(out, 0, 'core', 'Galactic core', u.galaxy.params.name, [0, 0, 0], 999);
+    const slot = this.pushLabel(
+      out,
+      0,
+      'core',
+      'Galactic core',
+      u.galaxy.params.name,
+      [0, 0, 0],
+      999,
+    );
     const home = u.getRecord(u.homeStarId());
-    if (home) this.pushLabel(out, 1, home.id, home.name, 'You are here', home.posLy, 998);
+    if (home) this.pushLabel(out, slot, home.id, home.name, 'You are here', home.posLy, 998);
   }
 
+  /**
+   * Galaxy-scale features are labelled only from afar (> FEATURE_LABEL_MIN_LY): up close the
+   * starfield and system layers label the same objects themselves.
+   */
   private pushLabel(
     out: LabelSpec[],
     slot: number,
@@ -96,11 +106,22 @@ export class GalaxyLayer implements Layer {
     sub: string,
     posLy: readonly [number, number, number],
     rank: number,
-  ): void {
+  ): number {
     const g = this.options.cameraLy;
     this.rel.set(posLy[0] - g.x, posLy[1] - g.y, posLy[2] - g.z);
-    if (!projectRelative(this.rel, this.camera as PerspectiveCamera, this.width, this.height, this.scratch, this.screen))
-      return;
+    if (this.rel.length() < FEATURE_LABEL_MIN_LY) return slot;
+    if (
+      !projectRelative(
+        this.rel,
+        this.camera as PerspectiveCamera,
+        this.width,
+        this.height,
+        this.scratch,
+        this.screen,
+      )
+    )
+      return slot;
+    const isHome = key !== 'core';
     let spec = this.labelSpecs[slot];
     if (!spec) {
       spec = { key, text, x: 0, y: 0, priority: 0 };
@@ -112,10 +133,12 @@ export class GalaxyLayer implements Layer {
     spec.x = this.screen.x;
     spec.y = this.screen.y;
     spec.priority = LabelTier.galaxyFeature * 1000 + rank;
-    spec.marker = slot === 1 ? 'ring' : null;
-    spec.color = slot === 1 ? 'var(--sd-accent, #d9b36c)' : undefined;
-    spec.ref = slot === 1 ? { kind: 'star', id: key } : undefined;
+    spec.marker = isHome ? 'ring' : null;
+    spec.color = isHome ? 'var(--sd-accent, #d9b36c)' : undefined;
+    if (isHome) setStarRef(spec, key);
+    else spec.ref = undefined;
     out.push(spec);
+    return slot + 1;
   }
 
   setQuality(q: Quality): void {

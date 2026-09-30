@@ -6,8 +6,8 @@
  */
 import { Effect } from 'postprocessing';
 import type { Vector3 } from 'three';
-import type { FrameInfo } from '../engine/contracts';
 import { log } from '../core/log';
+import type { FrameInfo } from '../engine/contracts';
 import type { PostFX } from '../render/post/PostFX';
 
 type Module = Record<string, unknown>;

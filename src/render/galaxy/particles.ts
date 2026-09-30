@@ -13,7 +13,7 @@
  * ./calibration.ts); `radiance` stores the peak radiance Φ / (2πσ²) × unit-luminance colour, to be
  * multiplied by the emission scale k_E and per-kind gains in the shader.
  */
-import { clamp } from '../../core/math';
+import { clamp, lerp, smoothstep } from '../../core/math';
 import { createRng } from '../../core/rng';
 import type { Rng } from '../../core/types';
 import {
@@ -47,6 +47,9 @@ export interface ParticleOptions {
   readonly diskK: number;
   readonly thickK: number;
   readonly youngK: number;
+  /** Young population at the centre; blends to `youngK` (and bulgeK + 500 → diskK) by `gradientLy`. */
+  readonly innerYoungK: number;
+  readonly gradientLy: number;
   readonly saturation: number;
   /** Highlight compression (./calibration.ts `compressLight`): knee in unscaled light, γ. */
   readonly kneeLight: number;
@@ -68,7 +71,9 @@ export const DEFAULT_PARTICLE_OPTIONS: ParticleOptions = {
   diskK: 5600,
   thickK: 4900,
   youngK: 12_000,
-  saturation: 1.3,
+  innerYoungK: 5200,
+  gradientLy: 25_000,
+  saturation: 1.5,
   kneeLight: Number.POSITIVE_INFINITY,
   kneeGamma: 1,
 };
@@ -177,13 +182,15 @@ export function generateGalaxyParticles(
       while (ci < cumulative.length - 1 && u >= (cumulative[ci] as number)) ci++;
       const component = GALAXY_COMPONENTS[ci] as GalaxyComponent;
       structure.sampleComponent(rng, component, p);
+      // Radial population gradient, as in the volume: smoothstep(0, gradientLy, R).
+      const outer = smoothstep(0, options.gradientLy, Math.hypot(p[0], p[2]));
       let tempK: number;
       switch (component) {
         case 'arm':
           // Young OB-rich light, with the odd red supergiant.
           tempK = rng.chance(0.08)
             ? rng.range(3500, 4300)
-            : options.youngK * Math.exp(rng.normal(0, 0.35));
+            : lerp(options.innerYoungK, options.youngK, outer) * Math.exp(rng.normal(0, 0.35));
           break;
         case 'bulge':
         case 'bar':
@@ -195,8 +202,9 @@ export function generateGalaxyParticles(
         default:
           // Thick-disk stars (far from the midplane) are older and redder.
           tempK =
-            (Math.abs(p[1]) > 1.5 * g.thinHeightLy ? options.thickK : options.diskK) *
-            Math.exp(rng.normal(0, 0.08));
+            (Math.abs(p[1]) > 1.5 * g.thinHeightLy
+              ? options.thickK
+              : lerp(options.bulgeK + 500, options.diskK, outer)) * Math.exp(rng.normal(0, 0.08));
       }
       populationColorInto(clamp(tempK, 2500, 40_000), options.saturation, radiance, i * 3);
       write(i, p[0], p[1], p[2], logUniform(rng, options.fieldSigmaLy), PARTICLE_KIND.field);

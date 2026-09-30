@@ -30,6 +30,7 @@ uniform float uLocked;
 uniform float uIceTemp;
 uniform float uLapse;
 uniform int uEmissiveKind;
+uniform float uAo;
 
 out vec4 fragColor;
 
@@ -86,14 +87,14 @@ void main() {
     float wet = 0.26 * exp(-alat * alat / 0.10)
               + 0.14 * exp(-(alat - 0.85) * (alat - 0.85) / 0.06)
               - 0.26 * exp(-(alat - 0.46) * (alat - 0.46) / 0.035);
-    float M = clamp(moist + lw * wet + 0.22 * (1.0 - smoothstep(0.0, 0.3, h)) + 0.02, 0.0, 1.0);
+    float M = clamp(moist + lw * wet + 0.22 * (1.0 - smoothstep(0.0, 0.3, h)) + 0.08, 0.0, 1.0);
     vec3 soil = mix(uC0, uC1, smoothstep(0.25, 0.75, geo));
     float dry = 1.0 - smoothstep(0.2, 0.48, M);
     vec3 ground = mix(soil, uSand, dry * 0.8);
     vec3 rock = mix(uC2, uC3, geo);
-    float rockW = clamp(smoothstep(0.09, 0.24, slope) + 0.8 * smoothstep(0.5, 0.95, h), 0.0, 1.0);
+    float rockW = clamp(smoothstep(0.12, 0.3, slope) + 0.8 * smoothstep(0.55, 0.95, h), 0.0, 1.0);
     float vegT = smoothstep(268.0, 286.0, Tk) * (1.0 - smoothstep(318.0, 336.0, Tk));
-    float veg = vegT * smoothstep(0.2, 0.5, M) * (1.0 - rockW) * uVegAmount;
+    float veg = vegT * smoothstep(0.14, 0.4, M) * (1.0 - rockW) * uVegAmount;
     vec3 vegCol = mix(uVeg * 1.55 + vec3(0.035, 0.028, 0.0), uVeg * 0.75, smoothstep(0.45, 0.85, M));
     vegCol *= 0.85 + 0.3 * fine;
     vec3 c = mix(ground, vegCol, veg);
@@ -120,12 +121,13 @@ void main() {
     col *= 1.0 + 0.3 * smoothstep(0.15, 0.5, slope);
   } else if (uStyle == 2) {
     // ---- dust worlds (Mars, Venus): bright dust over dark basalt, exposed rock on slopes
-    float dust = smoothstep(0.25, 0.75, geo + 0.25 * (moist - 0.5));
+    float region = 0.5 + 0.5 * fbm(p * 1.7 + uSeed * 0.5 + 0.3 * fbm(p * 4.0 + uSeed, 2), 3);
+    float dust = smoothstep(0.3, 0.7, geo + 0.25 * (moist - 0.5));
     col = mix(uC0, uC1, dust);
-    float dark = smoothstep(0.55, 0.8, 1.0 - geo + 0.3 * fine);
-    col = mix(col, uC2, dark * 0.75);
+    float dark = smoothstep(0.42, 0.62, 1.0 - region + 0.25 * (fine + 0.3 * h));
+    col = mix(col, uC2, dark * 0.85);
     col = mix(col, uC2 * 0.8, smoothstep(0.12, 0.3, slope) * 0.6);
-    col *= 0.88 + 0.24 * fine;
+    col *= 0.9 + 0.2 * fine;
     col = mix(col, uC1 * 1.15, aux * 0.3);
   } else if (uStyle == 3) {
     // ---- ice shells (Europa, Enceladus): bright ice, brown lineae and chaos, bright fresh craters
@@ -137,7 +139,7 @@ void main() {
     // ---- volcanic (Io, lava worlds): patchy sulphur/basalt with dark paterae
     col = mix(uC0, uC1, smoothstep(0.3, 0.7, geo));
     col = mix(col, uC2, smoothstep(0.55, 0.8, 0.5 + 0.5 * fbm(p * 5.0 + uSeed * 0.9, 3)) * 0.85);
-    col = mix(col, uC3, clamp(spec * 1.4, 0.0, 1.0));
+    col = mix(col, uC3, clamp(aux * 1.2, 0.0, 1.0));
     col *= 0.85 + 0.3 * fine;
   } else {
     // ---- dwarf planets (Pluto): bright plains in the lowlands, dark tholin belt near the equator
@@ -165,7 +167,7 @@ void main() {
     if (isSea) {
       vec2 wv = worley(p * 16.0 + uSeed, 1.0);
       float crackLine = 1.0 - smoothstep(0.0, 0.1, wv.y - wv.x);
-      seaEmis = mix(0.4, 1.0, crackLine);
+      seaEmis = mix(0.18, 1.0, crackLine);
       col = uC0 * 0.45;
     }
     emis = max(seaEmis, spec * 0.95);
@@ -173,6 +175,9 @@ void main() {
     emis = isSea ? 0.0 : cityLights(p, h, Tk, ice, slope);
   }
   emis *= 1.0 - ice;
+
+  // ---- baked cavity occlusion: bowls darker, crests lighter
+  if (!isSea) col *= clamp(1.0 - uAo * cavity(uv, h), 0.5, 1.3);
 
   fragColor = vec4(col, 0.5 + 0.5 * emis - 0.5 * ice);
 }

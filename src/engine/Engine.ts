@@ -17,8 +17,8 @@ import type { QualitySetting } from '../state/contracts';
 import type { Universe } from '../universe/contracts';
 import { CameraRig } from './camera/CameraRig';
 import { type FocusHandle, resolveFocus } from './camera/focus';
-import { framingDistanceKm, OVERVIEW_PITCH, type OrbitPose } from './camera/framing';
 import { galacticLyOf, systemKmOf } from './camera/frames';
+import { framingDistanceKm, type OrbitPose, OVERVIEW_PITCH } from './camera/framing';
 import type { CameraSnapshot, FrameInfo, LabelSpec, Layer, PickHit } from './contracts';
 import { LayerStackPass } from './LayerStackPass';
 import { LevelTracker, type SystemCandidate } from './levels';
@@ -137,7 +137,15 @@ export class Engine {
 
     const centre = resolveFocus(options.universe, { kind: 'galaxy', centerLy: [0, 0, 0] });
     if (!centre) throw new Error('Engine: cannot resolve the galactic centre');
-    const pose: OrbitPose = { yaw: 0.9, pitch: OVERVIEW_PITCH, distanceKm: framingDistanceKm(centre) };
+    const pose: OrbitPose = {
+      yaw: 0.9,
+      pitch: OVERVIEW_PITCH,
+      distanceKm: framingDistanceKm(
+        centre,
+        (canvas.clientWidth || window.innerWidth) /
+          Math.max(1, canvas.clientHeight || window.innerHeight),
+      ),
+    };
     this.rig = new CameraRig((t) => this.resolve(t), centre, pose, this.fovDeg / RAD_TO_DEG);
 
     this.snapshot = {
@@ -322,6 +330,7 @@ export class Engine {
     this.frame.width = width;
     this.frame.height = height;
     this.frame.pixelRatio = pixelRatio;
+    this.rig.viewAspect = width / height;
     this.stats.renderScale = scale;
     this.stats.pixelRatio = pixelRatio;
   }
@@ -347,7 +356,8 @@ export class Engine {
 
     const systemId: StarId | null = this.levels.systemId;
     let handle: FocusHandle | null = null;
-    for (let i = 0; i < n; i++) if (this.candidates[i].id === systemId) handle = this.candidateHandles[i];
+    for (let i = 0; i < n; i++)
+      if (this.candidates[i].id === systemId) handle = this.candidateHandles[i];
     this.systemHandleRef = handle;
     snap.systemId = handle ? systemId : null;
     snap.systemKm = handle

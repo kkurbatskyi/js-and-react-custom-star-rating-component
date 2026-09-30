@@ -99,7 +99,9 @@ function Glyph({ fill }: { fill: number }) {
           className="sd-star__fill"
           viewBox={`0 0 ${VIEW} ${VIEW}`}
           aria-hidden="true"
-          style={fill < 1 ? { clipPath: `inset(0 ${((1 - fill) * 100).toFixed(1)}% 0 0)` } : undefined}
+          style={
+            fill < 1 ? { clipPath: `inset(0 ${((1 - fill) * 100).toFixed(1)}% 0 0)` } : undefined
+          }
         >
           <path d={STAR_PATH} />
           <path className="sd-star__facets" d={FACET_PATH} />
@@ -259,6 +261,7 @@ export function StarRating({
           const hot = hover === n;
           return (
             <span key={n} className="sd-stars__cell" style={{ '--i': n - 1 } as CSSProperties}>
+              {/* biome-ignore lint/a11y/useSemanticElements: the WAI-ARIA radio-group pattern with a roving tabindex; re-clicking the chosen star must clear it, which a native radio cannot report */}
               <button
                 ref={(el) => {
                   buttons.current[n - 1] = el;

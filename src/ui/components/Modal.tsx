@@ -16,7 +16,13 @@ interface ModalProps {
   children: ReactNode;
 }
 
-export function Modal({ onClose, labelledBy, variant = 'center', className, children }: ModalProps) {
+export function Modal({
+  onClose,
+  labelledBy,
+  variant = 'center',
+  className,
+  children,
+}: ModalProps) {
   const ref = useFocusTrap<HTMLDivElement>(true);
   return (
     <div className="sd-modal" data-variant={variant} data-sd-interactive>

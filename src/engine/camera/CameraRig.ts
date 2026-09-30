@@ -22,6 +22,7 @@ import { KM_PER_LY } from '../../core/units';
 import { damp, dampFactor } from './damping';
 import { Flight } from './flight';
 import { type FocusHandle, parentTarget } from './focus';
+import { relativeKm } from './frames';
 import {
   arrivalPose,
   directionToYawPitch,
@@ -30,7 +31,6 @@ import {
   orbitDirection,
   orbitQuaternion,
 } from './framing';
-import { relativeKm } from './frames';
 
 /** Orbit (yaw/pitch) convergence rate, 1/s. */
 const ROTATE_LAMBDA = 11;
@@ -83,7 +83,11 @@ export class CameraRig {
   autoRotate = true;
   /** Idle auto-rotation speed, rad/s. */
   autoRotateRate = 0.018;
+  /** Viewport width / height (set by the engine): arrival framings fit portrait screens too. */
+  viewAspect = 1;
   events: RigEvents = {};
+  /** Incremented on every discontinuous camera change (cuts), so overlays can snap instead of fade. */
+  cutSerial = 0;
 
   private anchorHandle: FocusHandle;
   private fadeJump: FadeJump | null = null;
@@ -205,7 +209,7 @@ export class CameraRig {
     this.touch();
     this.hasZoomAnchor = false;
     const start = this.captureStart(to);
-    arrivalPose(to, _v.copy(start.dir), _arrival);
+    arrivalPose(to, _v.copy(start.dir), _arrival, this.viewAspect);
     if (reducedMotion) {
       this.cancelMotion();
       this.fadeJump = { from: this.focus, to, pose: { ..._arrival }, elapsed: 0, jumped: false };
@@ -233,7 +237,7 @@ export class CameraRig {
     if (!pose) {
       relativeKm(this.anchorHandle, to, _v).add(this.offsetKm);
       if (_v.lengthSq() === 0) _v.set(0, 0, 1);
-      arrivalPose(to, _v.normalize(), _arrival);
+      arrivalPose(to, _v.normalize(), _arrival, this.viewAspect);
     }
     this.cancelMotion();
     this.focus = to;
@@ -241,6 +245,7 @@ export class CameraRig {
     this.setPose(pose ?? _arrival);
     this.correction.identity();
     this.composeOrbit();
+    this.cutSerial++;
     this.events.onArrive?.(to, from);
   }
 
@@ -392,6 +397,7 @@ export class CameraRig {
       this.anchorHandle = fj.to;
       this.setPose(fj.pose);
       this.correction.identity();
+      this.cutSerial++;
       this.events.onArrive?.(fj.to, fj.from);
     }
     this.fade = Math.min(1, (fj.elapsed - FADE_OUT_SEC) / FADE_IN_SEC);
@@ -412,7 +418,7 @@ export class CameraRig {
 
   /** Scale the focus about the zoom anchor by the zoom just applied, keeping it under the cursor. */
   private followZoomAnchor(dLog: number): void {
-    if (Math.abs(this.logDistT - this.logDist) < 1e-5) this.hasZoomAnchor = false;
+    // Kept until another command clears it: the damped zoom converges asymptotically.
     if (dLog === 0) return;
     const f = Math.exp(dLog);
     const a = this.zoomAnchorLy;

@@ -53,11 +53,14 @@ export function HelpOverlay() {
   ];
   const keyboard: Row[] = [
     { keys: [mod, 'K'], what: 'Search (also “/”)' },
+    { keys: ['←', '↑', '↓', '→'], what: 'Orbit (W A S D too)' },
+    { keys: ['+', '−'], what: 'Zoom' },
+    { keys: ['F'], what: 'Fly to the selection' },
     { keys: ['Space'], what: 'Pause or resume time' },
-    { keys: [',', '.'], what: 'Slower, faster' },
+    { keys: ['[', ']'], what: 'Slower, faster' },
     { keys: ['L'], what: 'Logbook' },
     { keys: ['M'], what: 'Mute or unmute' },
-    { keys: ['H', 'P'], what: 'Photo mode (H or Esc leaves it)' },
+    { keys: ['H'], what: 'Photo mode (H or Esc leaves it)' },
     { keys: ['?'], what: 'This page' },
   ];
   return (
@@ -69,7 +72,12 @@ export function HelpOverlay() {
             Controls &amp; shortcuts
           </h2>
         </div>
-        <button type="button" className="sd-iconbtn" aria-label="Close help" onClick={() => closePanels()}>
+        <button
+          type="button"
+          className="sd-iconbtn"
+          aria-label="Close help"
+          onClick={() => closePanels()}
+        >
           <Icon name="close" size={18} />
         </button>
       </header>
@@ -79,9 +87,9 @@ export function HelpOverlay() {
       </div>
       <footer className="sd-help__foot">
         <p>
-          Every star is generated from a seed and stays where it is; the same star has the same planets, the same
-          name and the same rating page every time you come back. No images, no audio files: every pixel and every
-          note is computed.
+          Every star is generated from a seed and stays where it is; the same star has the same
+          planets, the same name and the same rating page every time you come back. No images, no
+          audio files: every pixel and every note is computed.
         </p>
         <p className="sd-help__wink">
           This used to be a star-rating component. It now rates actual stars.

@@ -150,7 +150,7 @@ void main() {
 
   // ---- continents: an 8-octave domain-warped fBm; coastlines come from where it crosses the sea level
   vec3 w = q + uWarp * vec3(fbm(q * 1.9 + 5.1, 3), fbm(q * 1.9 + 12.7, 3), fbm(q * 1.9 + 21.3, 3));
-  float c = fbm(w, 8, 2.0, 0.46);
+  float c = fbm(w, 7, 2.0, 0.44);
   c -= uEyeball * 0.5 * smoothstep(-0.3, 0.9, p.x);          // liquid basin under the substellar point
   float hasSea = uSea > -8.0 ? 1.0 : 0.0;
   float land = mix(c, c - uSea, hasSea);
@@ -162,11 +162,11 @@ void main() {
   // ---- mountain belts: ridged multifractal clustered by a low-frequency 'orogeny' mask
   float mountains = 0.0;
   if (uMountains > 0.0) {
-    float oro = smoothstep(0.1, 0.6, 0.5 + 0.5 * fbm(q * 1.15 + 41.0, 3) + 0.25 * coastal);
+    float oro = smoothstep(0.42, 0.78, 0.5 + 0.5 * fbm(q * 1.15 + 41.0, 3) + 0.2 * coastal);
     float ridge = ridged(w * 2.4 + 9.0, 7);
     mountains = ridge * ridge * oro * coastal * uMountains;
   }
-  float hills = uHills > 0.0 ? fbm(w * 5.0 + 21.0, 5) * uHills * coastal * 0.16 : 0.0;
+  float hills = uHills > 0.0 ? fbm(w * 4.0 + 21.0, 5) * uHills * coastal * 0.11 : 0.0;
   float h = macro + mountains * 0.95 + hills;
 
   float special = 0.0;
@@ -175,8 +175,8 @@ void main() {
   // ---- mare: dark, smooth basalt basins that flood old terrain
   float mare = 0.0;
   if (uMare > 0.0) {
-    float m = 0.5 + 0.5 * fbm(q * 0.9 + 63.0, 4);
-    mare = smoothstep(0.66 - 0.7 * uMare, 0.72 - 0.7 * uMare, m);
+    float m = 0.5 + 0.5 * fbm(q * 0.9 + 63.0 + 0.35 * fbm(q * 2.3, 2), 4);
+    mare = smoothstep(0.72 - 0.5 * uMare, 0.77 - 0.5 * uMare, m);
     h = h * (1.0 - 0.85 * mare) - 0.12 * mare;
     special = mare;
   }
@@ -232,7 +232,9 @@ void main() {
     vec2 wv = worley(cq, 1.0);
     float crack = 1.0 - smoothstep(0.0, 0.07, wv.y - wv.x);
     float activity = smoothstep(0.1, 0.55, 0.5 + 0.5 * fbm(q * 1.4 + 17.0, 3));
-    special = max(pit * 0.95, crack * activity * 0.9);
+    float lake = smoothstep(0.62, 0.8, 0.5 + 0.5 * fbm(q * 3.1 + 5.0, 3));   // only some paterae hold a lava lake
+    special = max(crack * activity * 0.85, pit * lake * 0.7);
+    aux = pit;
     h -= 0.06 * crack;
   }
 

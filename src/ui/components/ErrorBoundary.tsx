@@ -29,7 +29,9 @@ export class ErrorBoundary extends Component<Props, State> {
     return (
       <div className="sd-panel sd-fallback" role="alert">
         <p className="sd-eyebrow">Instrument fault</p>
-        <p className="sd-fallback__text">The {this.props.name} hit turbulence. The rest of the observatory is fine.</p>
+        <p className="sd-fallback__text">
+          The {this.props.name} hit turbulence. The rest of the observatory is fine.
+        </p>
         <button type="button" className="sd-btn" onClick={() => this.setState({ failed: false })}>
           Try again
         </button>

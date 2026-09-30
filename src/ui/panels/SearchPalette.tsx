@@ -50,12 +50,54 @@ interface Section {
 const surprise = (kind: SurpriseKind) => () => surpriseMe(kind);
 
 const ACTIONS: readonly ActionItem[] = [
-  { type: 'action', key: 'home', title: 'Fly home', subtitle: 'Back to Aurelia, where it all began', icon: 'home', run: flyHome },
-  { type: 'action', key: 'surprise-habitable', title: 'Surprise me — a habitable world', subtitle: 'The best-looking planet in a random system', icon: 'sparkle', run: surprise('habitable') },
-  { type: 'action', key: 'surprise-ringed', title: 'Surprise me — a ringed giant', subtitle: 'Something Saturn-shaped', icon: 'ring', run: surprise('ringed') },
-  { type: 'action', key: 'surprise-exotic', title: 'Surprise me — an exotic object', subtitle: 'Pulsars, white dwarfs, things with event horizons', icon: 'core', run: surprise('exotic') },
-  { type: 'action', key: 'core', title: 'Visit the galactic core', subtitle: 'Ouroboros, four million suns in a very small place', icon: 'core', run: flyToCore },
-  { type: 'action', key: 'overview', title: 'Go to galaxy overview', subtitle: 'The whole spiral at once', icon: 'galaxy', run: galaxyOverview },
+  {
+    type: 'action',
+    key: 'home',
+    title: 'Fly home',
+    subtitle: 'Back to Aurelia, where it all began',
+    icon: 'home',
+    run: flyHome,
+  },
+  {
+    type: 'action',
+    key: 'surprise-habitable',
+    title: 'Surprise me — a habitable world',
+    subtitle: 'The best-looking planet in a random system',
+    icon: 'sparkle',
+    run: surprise('habitable'),
+  },
+  {
+    type: 'action',
+    key: 'surprise-ringed',
+    title: 'Surprise me — a ringed giant',
+    subtitle: 'Something Saturn-shaped',
+    icon: 'ring',
+    run: surprise('ringed'),
+  },
+  {
+    type: 'action',
+    key: 'surprise-exotic',
+    title: 'Surprise me — an exotic object',
+    subtitle: 'Pulsars, white dwarfs, things with event horizons',
+    icon: 'core',
+    run: surprise('exotic'),
+  },
+  {
+    type: 'action',
+    key: 'core',
+    title: 'Visit the galactic core',
+    subtitle: 'Ouroboros, four million suns in a very small place',
+    icon: 'core',
+    run: flyToCore,
+  },
+  {
+    type: 'action',
+    key: 'overview',
+    title: 'Go to galaxy overview',
+    subtitle: 'The whole spiral at once',
+    icon: 'galaxy',
+    run: galaxyOverview,
+  },
 ];
 
 function refFromId(id: string): SelectionRef | null {
@@ -67,7 +109,8 @@ function refFromId(id: string): SelectionRef | null {
 }
 
 function subtitleFor(model: ObjectModel): string {
-  if (model.kind === 'star') return `${model.star.spectralType} · ${model.system ? `${model.system.planets.length} planets` : 'unsurveyed'}`;
+  if (model.kind === 'star')
+    return `${model.star.spectralType} · ${model.system ? `${model.system.planets.length} planets` : 'unsurveyed'}`;
   if (model.kind === 'planet') return `${model.planet.type.replace('-', ' ')} · ${model.star.name}`;
   return `moon of ${model.planet.name} · ${model.star.name}`;
 }
@@ -91,12 +134,25 @@ function PaletteBody() {
     const out: Section[] = [];
     if (q) {
       const lower = q.toLowerCase();
-      const actions = ACTIONS.filter((a) => a.title.toLowerCase().includes(lower) || a.subtitle.toLowerCase().includes(lower));
+      const actions = ACTIONS.filter(
+        (a) => a.title.toLowerCase().includes(lower) || a.subtitle.toLowerCase().includes(lower),
+      );
       if (actions.length) out.push({ title: 'Actions', items: actions.slice(0, 3) });
-      const found: Item[] = universe.search(q, 8).map((r) => {
-        const model = resolveObject(universe, r.ref);
-        return { type: 'object', key: `${r.ref.kind}:${r.ref.id}`, ref: r.ref, title: r.name, subtitle: r.subtitle, model };
-      });
+      const seenRefs = new Set<string>();
+      const found: Item[] = [];
+      for (const r of universe.search(q, 10)) {
+        const key = `${r.ref.kind}:${r.ref.id}`;
+        if (seenRefs.has(key)) continue; // the facade may list a remembered body twice
+        seenRefs.add(key);
+        found.push({
+          type: 'object',
+          key,
+          ref: r.ref,
+          title: r.name,
+          subtitle: r.subtitle,
+          model: resolveObject(universe, r.ref),
+        });
+      }
       if (found.length) out.push({ title: 'Stars & worlds', items: found });
       return out;
     }
@@ -109,7 +165,15 @@ function PaletteBody() {
       const model = resolveObject(universe, ref);
       if (!model) return;
       seen.add(id);
-      recent.push({ type: 'object', key: `${hint}:${id}`, ref, title: objectName(model), subtitle: subtitleFor(model), model, hint });
+      recent.push({
+        type: 'object',
+        key: `${hint}:${id}`,
+        ref,
+        title: objectName(model),
+        subtitle: subtitleFor(model),
+        model,
+        hint,
+      });
     };
     for (const v of visited.slice(0, 4)) push(v.id, 'recent');
     for (const b of bookmarks.slice(0, 4)) push(b, 'bookmark');
@@ -118,9 +182,10 @@ function PaletteBody() {
   }, [q, universe, visited, bookmarks]);
 
   const flat = useMemo(() => sections.flatMap((s) => s.items), [sections]);
-  useEffect(() => setActive(0), [q]);
   useEffect(() => {
-    list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
+    const key = flat[active]?.key;
+    if (key)
+      list.current?.querySelector(`[id="sd-opt-${key}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [active, flat]);
 
   const choose = (item: Item | undefined) => {
@@ -152,7 +217,12 @@ function PaletteBody() {
 
   let index = -1;
   return (
-    <Modal onClose={() => closePanels()} labelledBy="sd-search-title" variant="top" className="sd-palette">
+    <Modal
+      onClose={() => closePanels()}
+      labelledBy="sd-search-title"
+      variant="top"
+      className="sd-palette"
+    >
       <h2 id="sd-search-title" className="sd-visually-hidden">
         Search stars and worlds
       </h2>
@@ -172,14 +242,31 @@ function PaletteBody() {
           autoCorrect="off"
           spellCheck={false}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setActive(0);
+          }}
           onKeyDown={onKeyDown}
         />
-        <span className="sd-kbd" aria-hidden="true">
+        <span className="sd-kbd sd-palette__esc" aria-hidden="true">
           Esc
         </span>
+        <button
+          type="button"
+          className="sd-iconbtn sd-palette__close"
+          aria-label="Close search"
+          onClick={() => closePanels()}
+        >
+          <Icon name="close" size={18} />
+        </button>
       </div>
-      <div className="sd-palette__list" id="sd-search-list" role="listbox" aria-label="Results" ref={list}>
+      <div
+        className="sd-palette__list"
+        id="sd-search-list"
+        role="listbox"
+        aria-label="Results"
+        ref={list}
+      >
         {flat.length === 0 && (
           <p className="sd-palette__empty">
             Nothing by that name in this galaxy.
@@ -187,6 +274,7 @@ function PaletteBody() {
           </p>
         )}
         {sections.map((section) => (
+          // biome-ignore lint/a11y/useSemanticElements: listbox > group > option is the structure ARIA specifies for a grouped listbox
           <div key={section.title} role="group" aria-label={section.title}>
             <p className="sd-eyebrow sd-palette__section">{section.title}</p>
             {section.items.map((item) => {
@@ -208,18 +296,38 @@ function PaletteBody() {
                   data-sd-interactive
                 >
                   <span className="sd-palette__glyph">
-                    {item.type === 'action' ? <Icon name={item.icon} size={19} /> : <ObjectGlyph model={item.model} size={28} />}
+                    {item.type === 'action' ? (
+                      <Icon name={item.icon} size={19} />
+                    ) : (
+                      <ObjectGlyph model={item.model} size={28} />
+                    )}
                   </span>
                   <span className="sd-palette__text">
-                    <span className={item.type === 'action' ? 'sd-palette__title is-action' : 'sd-palette__title'}>{item.title}</span>
+                    <span
+                      className={
+                        item.type === 'action' ? 'sd-palette__title is-action' : 'sd-palette__title'
+                      }
+                    >
+                      {item.title}
+                    </span>
                     <span className="sd-palette__sub">{item.subtitle}</span>
                   </span>
                   <span className="sd-palette__aside">
                     {item.type === 'object' && rated > 0 && (
-                      <StarRating label={item.title} value={rated} readOnly size={11} caption="Your rating" />
+                      <StarRating
+                        label={item.title}
+                        value={rated}
+                        readOnly
+                        size={11}
+                        caption="Your rating"
+                      />
                     )}
-                    {item.type === 'object' && item.hint === 'bookmark' && <Icon name="bookmark" size={14} filled />}
-                    {item.type === 'object' && item.hint === 'recent' && <Icon name="clock" size={14} />}
+                    {item.type === 'object' && item.hint === 'bookmark' && (
+                      <Icon name="bookmark" size={14} filled />
+                    )}
+                    {item.type === 'object' && item.hint === 'recent' && (
+                      <Icon name="clock" size={14} />
+                    )}
                     {isActive && <span className="sd-kbd">↵</span>}
                   </span>
                 </div>

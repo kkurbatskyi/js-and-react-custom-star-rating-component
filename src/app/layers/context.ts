@@ -8,8 +8,8 @@ import type { FrameInfo } from '../../engine/contracts';
 import type { Engine } from '../../engine/Engine';
 import type { Quality, VisualFrame } from '../../render/contracts';
 import type { Universe } from '../../universe/contracts';
-import type { SystemAssetCache } from './SystemAssets';
 import type { FullVisualCache } from './FullVisualCache';
+import type { SystemAssetCache } from './SystemAssets';
 
 export interface LayerContext {
   readonly engine: Engine;
@@ -58,7 +58,9 @@ export function pixelsPerRadian(camera: PerspectiveCamera, height: number): numb
 }
 
 export function onScreen(p: ScreenPoint, width: number, height: number, marginPx = 0): boolean {
-  return p.x >= -marginPx && p.y >= -marginPx && p.x <= width + marginPx && p.y <= height + marginPx;
+  return (
+    p.x >= -marginPx && p.y >= -marginPx && p.x <= width + marginPx && p.y <= height + marginPx
+  );
 }
 
 /** A reusable VisualFrame for a layer's visuals. */
@@ -77,7 +79,11 @@ export function createVisualFrame(renderer: WebGLRenderer, quality: Quality): Vi
 }
 
 /** Copy this frame's clocks and viewport into a layer's VisualFrame (no allocation). */
-export function syncVisualFrame(vf: VisualFrame, frame: FrameInfo, camera: PerspectiveCamera): VisualFrame {
+export function syncVisualFrame(
+  vf: VisualFrame,
+  frame: FrameInfo,
+  camera: PerspectiveCamera,
+): VisualFrame {
   vf.timeSec = frame.timeSec;
   vf.dtSec = frame.dtSec;
   vf.simDays = frame.simDays;

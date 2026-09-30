@@ -136,7 +136,8 @@ export class StarfieldLayer implements Layer {
     const dest = this.ctx.engine.rig.destination;
     this.destinationId = dest?.kind === 'star' ? dest.starId : null;
     if (this.frameNo++ % ANCHOR_REFRESH_FRAMES === 0 && this.ctx.labelsEnabled()) {
-      const max = frame.level === 'galaxy' ? 14 : 6;
+      // Background stars are labelled in the galaxy view, sparsely inside a system, not near a planet.
+      const max = frame.level === 'galaxy' ? 14 : frame.level === 'system' ? 4 : 0;
       this.anchorIds = this.visual.anchors(max).map((a) => a.id);
     }
     return this.slices;
@@ -227,7 +228,14 @@ export class StarfieldLayer implements Layer {
     if (!info || !this.camera) return null;
     const g = this.options.cameraLy;
     this.rel.set(info.posLy[0] - g.x, info.posLy[1] - g.y, info.posLy[2] - g.z);
-    return projectRelative(this.rel, this.camera, this.width, this.height, this.scratch, this.screen)
+    return projectRelative(
+      this.rel,
+      this.camera,
+      this.width,
+      this.height,
+      this.scratch,
+      this.screen,
+    )
       ? this.screen
       : null;
   }

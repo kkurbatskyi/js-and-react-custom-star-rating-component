@@ -9,9 +9,10 @@ import './fonts';
 import './theme.css';
 import './layout.css';
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { starIdOf } from '../universe';
 import { useStore } from '../state/store';
+import { starIdOf } from '../universe';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { COMPACT_MAX_WIDTH, LayoutContext, type LayoutInfo, useReducedMotion } from './hooks';
 import { Coordinates } from './hud/Coordinates';
 import { FpsMeter } from './hud/FpsMeter';
 import { HoverTooltip } from './hud/HoverTooltip';
@@ -20,7 +21,6 @@ import { ScaleBar } from './hud/ScaleBar';
 import { TimeControls } from './hud/TimeControls';
 import { Toasts } from './hud/Toasts';
 import { ViewControls } from './hud/ViewControls';
-import { COMPACT_MAX_WIDTH, type LayoutInfo, LayoutContext } from './hooks';
 import { selectionForTarget } from './lib/model';
 import { sheetStateOf, useSheetStore } from './lib/sheetStore';
 import { installShortcuts } from './lib/shortcuts';
@@ -42,8 +42,11 @@ function useLayoutInfo(ref: RefObject<HTMLElement | null>): LayoutInfo {
     if (!el) return;
     const read = () => {
       const { width, height } = el.getBoundingClientRect();
+      if (width === 0 || height === 0) return; // not laid out (hidden, or no layout engine): keep the last size
       setSize((prev) =>
-        Math.abs(prev.width - width) < 0.5 && Math.abs(prev.height - height) < 0.5 ? prev : { width, height },
+        Math.abs(prev.width - width) < 0.5 && Math.abs(prev.height - height) < 0.5
+          ? prev
+          : { width, height },
       );
     };
     read();
@@ -71,10 +74,13 @@ export function App() {
   const root = useRef<HTMLDivElement>(null);
   const layout = useLayoutInfo(root);
   const photoMode = useStore((s) => s.ui.photoMode);
-  const reducedMotion = useStore((s) => s.settings.reducedMotion);
+  const reducedMotion = useReducedMotion();
+  const ready = useStore((s) => s.ready);
   const lowFx = useStore((s) => s.settings.quality === 'low');
   const showFps = useStore((s) => s.settings.showFps);
-  const modalOpen = useStore((s) => s.ui.open.search || s.ui.open.logbook || s.ui.open.settings || s.ui.open.help);
+  const modalOpen = useStore(
+    (s) => s.ui.open.search || s.ui.open.logbook || s.ui.open.settings || s.ui.open.help,
+  );
   const collapsed = useStore((s) => s.ui.panelCollapsed);
   const selection = useStore((s) => s.selection);
   const focus = useStore((s) => s.focus);
@@ -112,7 +118,7 @@ export function App() {
               <PhotoMode />
             </ErrorBoundary>
           ) : (
-            <div className="sd-main" inert={modalOpen}>
+            <div className="sd-main" inert={modalOpen || !ready}>
               <TopBar />
               <div className="sd-slot sd-slot--coords">
                 <Coordinates />

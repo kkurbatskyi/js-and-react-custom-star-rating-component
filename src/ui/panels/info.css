@@ -103,8 +103,7 @@
   border: 1px solid var(--sd-line-strong);
   border-radius: var(--sd-r-2);
   background:
-    linear-gradient(180deg, var(--sd-accent-wash), transparent 75%),
-    rgb(255 255 255 / 0.015);
+    linear-gradient(180deg, var(--sd-accent-wash), transparent 75%), rgb(255 255 255 / 0.015);
 }
 .sd-plate__top {
   display: flex;
@@ -162,7 +161,11 @@
   transform-origin: 0 50%;
 }
 .sd-info__peek {
-  display: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sd-s-3);
+  padding: 2px var(--sd-inset) 6px;
 }
 
 /* scrolling body -------------------------------------------------------------------------- */
@@ -247,7 +250,7 @@
     border-color var(--sd-dur-1) var(--sd-ease);
 }
 .sd-row:hover,
-.sd-row[aria-selected='true'] {
+.sd-row[aria-selected="true"] {
   background: var(--sd-hover);
   border-color: var(--sd-line);
 }
@@ -382,6 +385,7 @@
 
 /* bottom sheet (phone) -------------------------------------------------------------------- */
 .sd-grip {
+  position: relative;
   display: grid;
   place-items: center;
   flex: none;
@@ -392,6 +396,12 @@
   border: 0;
   touch-action: none;
   cursor: grab;
+}
+/* The visible bar is slim; the touch area reaches down over the header (≥ 44px). */
+.sd-grip::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 -20px;
 }
 .sd-grip span {
   width: 38px;
@@ -419,11 +429,15 @@
   .sd-info.is-dragging {
     transition: none;
   }
-  .sd-info[data-sheet='peek'] {
+  .sd-info.sd-ticked::before,
+  .sd-info.sd-ticked::after {
+    display: none;
+  }
+  .sd-info[data-sheet="peek"] {
     height: calc(176px + var(--sd-safe-b));
   }
-  .sd-info[data-sheet='full'] {
-    height: calc(100% - 76px);
+  .sd-info[data-sheet="full"] {
+    height: calc(100% - var(--sd-topbar-h));
   }
   .sd-info__head {
     padding: 2px 56px 10px var(--sd-inset);
@@ -443,19 +457,19 @@
   .sd-info__scroll {
     padding: 14px var(--sd-inset) calc(20px + var(--sd-safe-b));
   }
-  .sd-info[data-sheet='peek'] .sd-info__fixed,
-  .sd-info[data-sheet='peek'] .sd-info__scroll,
-  .sd-info[data-sheet='peek'] .sd-info__sub {
+  .sd-info[data-sheet="peek"] .sd-info__fixed,
+  .sd-info[data-sheet="peek"] .sd-info__scroll,
+  .sd-info[data-sheet="peek"] .sd-info__sub {
     display: none;
   }
-  .sd-info[data-sheet='peek'] .sd-info__peek {
+  .sd-info[data-sheet="peek"] .sd-info__peek {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--sd-s-3);
     padding: 2px var(--sd-inset) 6px;
   }
-  .sd-info[data-sheet='peek'] .sd-info__name {
+  .sd-info[data-sheet="peek"] .sd-info__name {
     margin-bottom: 8px;
   }
   .sd-info--galaxy .sd-info__scroll {
@@ -470,5 +484,20 @@
   to {
     transform: none;
     opacity: 1;
+  }
+}
+
+/* Short windows (landscape phones): the whole card scrolls as one instead of squeezing the body. */
+@container sd (max-height: 560px) and (min-width: 721px) {
+  .sd-info__content {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .sd-info__scroll {
+    flex: none;
+    overflow: visible;
+  }
+  .sd-info__fixed {
+    padding-bottom: 12px;
   }
 }

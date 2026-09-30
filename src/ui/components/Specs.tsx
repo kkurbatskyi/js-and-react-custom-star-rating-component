@@ -26,6 +26,10 @@ export function SpecList({ rows }: { rows: readonly (SpecRow | null | false)[] }
 }
 
 const TICKS = 24;
+const METER_TICKS = Array.from({ length: TICKS }, (_, n) => ({
+  id: `tick-${n}`,
+  major: n % 6 === 0,
+}));
 
 /** 0..1 gauge drawn as fine tick marks — an instrument, not a progress bar. */
 export function Meter({ value, label, text }: { value: number; label: string; text: string }) {
@@ -33,26 +37,35 @@ export function Meter({ value, label, text }: { value: number; label: string; te
   const lit = Math.round(v * TICKS);
   return (
     <div className="sd-meter">
-      <div
-        className="sd-meter__ticks"
-        role="meter"
+      {/* The native element carries the semantics; the ticks are decoration. */}
+      <meter
+        className="sd-visually-hidden"
+        min={0}
+        max={1}
+        value={Number(v.toFixed(2))}
         aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={1}
-        aria-valuenow={Number(v.toFixed(2))}
         aria-valuetext={text}
       >
-        {Array.from({ length: TICKS }, (_, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length decorative ticks
-          <i key={i} className={i < lit ? 'is-lit' : undefined} data-major={i % 6 === 0 ? '' : undefined} />
+        {text}
+      </meter>
+      <div className="sd-meter__ticks" aria-hidden="true">
+        {METER_TICKS.map((t, n) => (
+          <i
+            key={t.id}
+            className={n < lit ? 'is-lit' : undefined}
+            data-major={t.major ? '' : undefined}
+          />
         ))}
       </div>
-      <span className="sd-meter__text">{text}</span>
+      <span className="sd-meter__text" aria-hidden="true">
+        {text}
+      </span>
     </div>
   );
 }
 
-const trace = (f: number): string => (f > 0 && f < 0.001 ? '<0.1%' : formatPercent(f, { decimals: f < 0.1 ? 1 : 0 }));
+const trace = (f: number): string =>
+  f > 0 && f < 0.001 ? '<0.1%' : formatPercent(f, { decimals: f < 0.1 ? 1 : 0 });
 
 export function CompositionBars({
   composition,

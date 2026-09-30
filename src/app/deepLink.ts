@@ -53,9 +53,7 @@ export function writeHash(token: string): void {
   try {
     const current = window.location.hash.replace(/^#/, '');
     if (current === token) return;
-    const url = token
-      ? `#${token}`
-      : `${window.location.pathname}${window.location.search}`;
+    const url = token ? `#${token}` : `${window.location.pathname}${window.location.search}`;
     window.history.replaceState(window.history.state, '', url);
   } catch {
     // history unavailable (sandbox): the link simply is not kept in sync.

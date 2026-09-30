@@ -5,7 +5,14 @@
  * What it shows: the selection, else where the camera is (or is heading) — so a deep link or a search
  * result opens its card, and while flying the card already describes the destination.
  */
-import { type KeyboardEvent, type PointerEvent, type ReactNode, useEffect, useRef, useState } from 'react';
+import {
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useStore } from '../../state/store';
 import { Icon } from '../components/Icon';
 import { useLayout, useObject } from '../hooks';
@@ -17,7 +24,7 @@ import { ActionRow, BodyBody, ObjectHeader, PeekRow, RatingPlate, StarBody } fro
 import './info.css';
 
 const PEEK_PX = 176;
-const FULL_MARGIN_PX = 76;
+const FULL_MARGIN_PX = 100; // leaves the (two-row) phone top bar visible
 const HALF_RATIO = 0.56;
 
 function Uncharted({ id }: { id: string }) {
@@ -25,8 +32,8 @@ function Uncharted({ id }: { id: string }) {
     <div className="sd-info__scroll">
       <p className="sd-eyebrow">Uncharted</p>
       <p className="sd-blurb">
-        The catalogue has no record of <span className="sd-mono">{id}</span>. It is a large catalogue, and
-        occasionally wrong.
+        The catalogue has no record of <span className="sd-mono">{id}</span>. It is a large
+        catalogue, and occasionally wrong.
       </p>
       <button type="button" className="sd-btn sd-btn--primary" onClick={flyHome}>
         <Icon name="home" size={15} />
@@ -63,7 +70,14 @@ export function InfoPanel() {
   const sheet: SheetState = sheetStateOf(collapsed, full);
   const [dragH, setDragH] = useState<number | null>(null);
   const panel = useRef<HTMLElement>(null);
-  const drag = useRef<{ y0: number; h0: number; y: number; t: number; v: number; moved: boolean } | null>(null);
+  const drag = useRef<{
+    y0: number;
+    h0: number;
+    y: number;
+    t: number;
+    v: number;
+    moved: boolean;
+  } | null>(null);
 
   const snaps = () => ({
     peek: PEEK_PX,
@@ -144,14 +158,19 @@ export function InfoPanel() {
     content = (
       <div className="sd-info__content" key={model.id}>
         <ObjectHeader model={model} />
-        <PeekRow model={model} />
-        <div className="sd-info__fixed">
-          <RatingPlate id={model.id} name={objectName(model)} survey={surveyRatingOf(model)} />
-          <ActionRow model={model} />
-        </div>
-        <div className="sd-info__scroll">
-          {model.kind === 'star' ? <StarBody model={model} /> : <BodyBody model={model} />}
-        </div>
+        {compact && sheet === 'peek' ? (
+          <PeekRow model={model} />
+        ) : (
+          <>
+            <div className="sd-info__fixed">
+              <RatingPlate id={model.id} name={objectName(model)} survey={surveyRatingOf(model)} />
+              <ActionRow model={model} />
+            </div>
+            <div className="sd-info__scroll">
+              {model.kind === 'star' ? <StarBody model={model} /> : <BodyBody model={model} />}
+            </div>
+          </>
+        )}
       </div>
     );
   }
@@ -168,7 +187,7 @@ export function InfoPanel() {
         <button
           type="button"
           className="sd-grip"
-          aria-label={sheet === 'peek' ? 'Expand details' : 'Resize details'}
+          aria-label="Resize details"
           onPointerDown={onGripDown}
           onPointerMove={onGripMove}
           onPointerUp={onGripUp}
@@ -181,10 +200,17 @@ export function InfoPanel() {
       <button
         type="button"
         className="sd-iconbtn sd-info__collapse"
-        aria-label={compact ? (sheet === 'peek' ? 'Expand details' : 'Collapse details') : 'Hide details'}
-        onClick={() => (compact ? applySheet(sheet === 'peek' ? 'half' : 'peek') : setCollapsed(true))}
+        aria-label={
+          compact ? (sheet === 'peek' ? 'Expand details' : 'Collapse details') : 'Hide details'
+        }
+        onClick={() =>
+          compact ? applySheet(sheet === 'peek' ? 'half' : 'peek') : setCollapsed(true)
+        }
       >
-        <Icon name={compact ? (sheet === 'peek' ? 'chevronUp' : 'chevronDown') : 'chevronRight'} size={17} />
+        <Icon
+          name={compact ? (sheet === 'peek' ? 'chevronUp' : 'chevronDown') : 'chevronRight'}
+          size={17}
+        />
       </button>
       {content}
     </aside>

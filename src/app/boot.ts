@@ -6,8 +6,8 @@
  */
 import { formatCount } from '../core/format';
 import { log } from '../core/log';
-import { Engine } from '../engine/Engine';
 import type { LabelSpec } from '../engine/contracts';
+import { Engine } from '../engine/Engine';
 import { InputController } from '../engine/input/InputController';
 import { LabelOverlay } from '../engine/labels/LabelOverlay';
 import { registerEngineCommands } from '../state/bridge';
@@ -32,6 +32,11 @@ export interface BootHandle {
   dispose(): void;
 }
 
+export interface BootOptions {
+  /** Awaited after the first frames, before `ready` / `__READY__` (dev pages script setups here). */
+  beforeReady?(): Promise<void> | void;
+}
+
 const bootLog = log.child('boot');
 /** Rendered frames before `ready`: shaders compiled, first images on screen. */
 const READY_AFTER_FRAMES = 3;
@@ -46,10 +51,10 @@ function progress(value: number, message: string): void {
   store.getState().setFromEngine({ boot: { progress: value, message } });
 }
 
-export function boot(canvas: HTMLCanvasElement): BootHandle {
+export function boot(canvas: HTMLCanvasElement, options: BootOptions = {}): BootHandle {
   const disposers: (() => void)[] = [];
   let disposed = false;
-  void start(canvas, disposers, () => disposed).catch((err: unknown) => {
+  void start(canvas, options, disposers, () => disposed).catch((err: unknown) => {
     bootLog.error('boot failed', err);
     progress(0, 'Something went wrong while charting the galaxy. Try reloading.');
   });
@@ -64,6 +69,7 @@ export function boot(canvas: HTMLCanvasElement): BootHandle {
 
 async function start(
   canvas: HTMLCanvasElement,
+  options: BootOptions,
   disposers: (() => void)[],
   isDisposed: () => boolean,
 ): Promise<void> {
@@ -165,6 +171,7 @@ async function start(
   });
   disposers.push(() => overlay.dispose());
   const labelBuffer: LabelSpec[] = [];
+  let cutSerial = engine.rig.cutSerial;
 
   engine.hooks.push({
     beforeUpdate(_e, dt) {
@@ -178,6 +185,10 @@ async function start(
       labelsOn = s.settings.labels;
       const showLabels = labelsOn && !s.ui.photoMode;
       overlay.setVisible(showLabels);
+      if (engine.rig.cutSerial !== cutSerial) {
+        cutSerial = engine.rig.cutSerial;
+        overlay.clear();
+      }
       if (showLabels) {
         const n = engine.collectLabels(labelBuffer);
         overlay.update(labelBuffer, n, frame.width, frame.height, frame.dtSec);
@@ -217,12 +228,14 @@ async function start(
   const link = parseDeepLink(window.location.hash);
   if (link) {
     const s = store.getState();
-    if (link.seed !== null && link.seed !== s.settings.galaxySeed) s.updateSettings({ galaxySeed: link.seed });
+    if (link.seed !== null && link.seed !== s.settings.galaxySeed)
+      s.updateSettings({ galaxySeed: link.seed });
     store.getState().requestFocus(link.target, 'jump');
   }
 
   engine.start();
   for (let i = 0; i < READY_AFTER_FRAMES; i++) await nextFrame();
+  await options.beforeReady?.();
   if (isDisposed()) return;
   storeSync.write();
   store.getState().setFromEngine({ ready: true, boot: { progress: 1, message: 'Ready' } });

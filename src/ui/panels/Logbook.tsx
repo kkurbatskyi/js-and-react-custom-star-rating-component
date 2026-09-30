@@ -30,7 +30,11 @@ interface Entry {
   at?: number;
 }
 
-const TAB_LABEL: Record<Tab, string> = { top: 'Top rated', visited: 'Visited', bookmarks: 'Bookmarked' };
+const TAB_LABEL: Record<Tab, string> = {
+  top: 'Top rated',
+  visited: 'Visited',
+  bookmarks: 'Bookmarked',
+};
 
 function refFromId(id: string): SelectionRef | null {
   const p = parseId(id);
@@ -41,7 +45,6 @@ function refFromId(id: string): SelectionRef | null {
       ? { kind: 'planet', id: p.planetId }
       : { kind: 'moon', id: p.moonId };
 }
-
 
 function makeEntry(
   universe: Universe,
@@ -59,7 +62,15 @@ function makeEntry(
       : model.kind === 'planet'
         ? `${model.planet.type.replace('-', ' ')} · ${model.star.name}`
         : `moon of ${model.planet.name}`;
-  return { id, ref, model, name: model ? objectName(model) : id, sub, rating: ratings[id] ?? 0, at };
+  return {
+    id,
+    ref,
+    model,
+    name: model ? objectName(model) : id,
+    sub,
+    rating: ratings[id] ?? 0,
+    at,
+  };
 }
 
 /** "just now", "12 min ago", "3 h ago", "2 days ago", then a date. */
@@ -123,7 +134,12 @@ function LogbookBody() {
   };
 
   return (
-    <Modal onClose={() => closePanels()} labelledBy="sd-logbook-title" variant="left" className="sd-logbook">
+    <Modal
+      onClose={() => closePanels()}
+      labelledBy="sd-logbook-title"
+      variant="left"
+      className="sd-logbook"
+    >
       <header className="sd-dialog__head">
         <div>
           <p className="sd-eyebrow">Kept in this browser · {universe.galaxy.params.name}</p>
@@ -131,7 +147,12 @@ function LogbookBody() {
             Logbook
           </h2>
         </div>
-        <button type="button" className="sd-iconbtn" aria-label="Close logbook" onClick={() => closePanels()}>
+        <button
+          type="button"
+          className="sd-iconbtn"
+          aria-label="Close logbook"
+          onClick={() => closePanels()}
+        >
           <Icon name="close" size={18} />
         </button>
       </header>
@@ -157,7 +178,12 @@ function LogbookBody() {
             onKeyDown={(e) => {
               const order = Object.keys(TAB_LABEL) as Tab[];
               const i = order.indexOf(t);
-              const next = e.key === 'ArrowRight' ? order[(i + 1) % 3] : e.key === 'ArrowLeft' ? order[(i + 2) % 3] : null;
+              const next =
+                e.key === 'ArrowRight'
+                  ? order[(i + 1) % 3]
+                  : e.key === 'ArrowLeft'
+                    ? order[(i + 2) % 3]
+                    : null;
               if (next) {
                 e.preventDefault();
                 setTab(next);
@@ -171,10 +197,18 @@ function LogbookBody() {
         ))}
       </div>
 
-      <div id="sd-logbook-panel" role="tabpanel" aria-labelledby={`sd-tab-${tab}`} className="sd-logbook__list">
+      <div
+        id="sd-logbook-panel"
+        role="tabpanel"
+        aria-labelledby={`sd-tab-${tab}`}
+        className="sd-logbook__list"
+      >
         {shown.length === 0 ? (
           <div className="sd-empty-state">
-            <Icon name={tab === 'bookmarks' ? 'bookmark' : tab === 'visited' ? 'fly' : 'star'} size={26} />
+            <Icon
+              name={tab === 'bookmarks' ? 'bookmark' : tab === 'visited' ? 'fly' : 'star'}
+              size={26}
+            />
             <p className="sd-empty-state__title">{EMPTY[tab].title}</p>
             <p className="sd-empty-state__body">{EMPTY[tab].body}</p>
             <button
@@ -195,7 +229,12 @@ function LogbookBody() {
             <ul className="sd-rows">
               {shown.map((e) => (
                 <li key={e.id}>
-                  <button type="button" className="sd-row sd-row--log" onClick={() => go(e)} disabled={!e.model}>
+                  <button
+                    type="button"
+                    className="sd-row sd-row--log"
+                    onClick={() => go(e)}
+                    disabled={!e.model}
+                  >
                     <span className="sd-row__swatch">
                       <ObjectGlyph model={e.model} size={30} />
                     </span>
@@ -204,7 +243,15 @@ function LogbookBody() {
                       <span className="sd-row__meta">{e.sub}</span>
                     </span>
                     <span className="sd-row__aside">
-                      {e.rating > 0 && <StarRating label={e.name} value={e.rating} readOnly size={12} caption="Your rating" />}
+                      {e.rating > 0 && (
+                        <StarRating
+                          label={e.name}
+                          value={e.rating}
+                          readOnly
+                          size={12}
+                          caption="Your rating"
+                        />
+                      )}
                       {tab === 'visited' && e.at !== undefined && (
                         <span className="sd-mono sd-row__temp">{relativeTime(e.at)}</span>
                       )}

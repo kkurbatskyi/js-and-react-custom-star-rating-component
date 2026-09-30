@@ -118,7 +118,10 @@ export class SystemAssets {
   }
 
   /** [start, end) of a planet's family (the planet and its moons) in `bodies`. */
-  familyRange(planetId: string, out: { start: number; end: number }): { start: number; end: number } {
+  familyRange(
+    planetId: string,
+    out: { start: number; end: number },
+  ): { start: number; end: number } {
     const start = this.indexOf(planetId);
     out.start = start;
     out.end = start;
@@ -147,7 +150,11 @@ export class SystemAssets {
       }
       b.orientation.copy(_q).premultiply(this.frame);
       const d = b.posS.length();
-      b.sunDirection.copy(b.posS).negate().divideScalar(Math.max(d, 1e-9)).applyQuaternion(this.frame);
+      b.sunDirection
+        .copy(b.posS)
+        .negate()
+        .divideScalar(Math.max(d, 1e-9))
+        .applyQuaternion(this.frame);
       const au = d / KM_PER_AU;
       // Artistic irradiance: (L/d²)^0.2, clamped so every world stays readable (1 ≈ Earth).
       b.sunIntensity = Math.min(2, Math.max(0.4, (lum / Math.max(au * au, 1e-6)) ** 0.2));

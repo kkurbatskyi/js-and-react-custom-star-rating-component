@@ -92,7 +92,9 @@ export class FocusHandle implements GalacticPoint {
       const r = body.radiusKm;
       this.radiusKm = r;
       // Just above the cloud tops / upper atmosphere.
-      const atmosphere = body.atmosphere ? Math.min(0.05 * r, 3 * body.atmosphere.scaleHeightKm) : 0;
+      const atmosphere = body.atmosphere
+        ? Math.min(0.05 * r, 3 * body.atmosphere.scaleHeightKm)
+        : 0;
       this.minDistanceKm = r * 1.02 + atmosphere;
       const ringKm = body.rings?.outerRadiusKm ?? 0;
       if (parts.moon) {

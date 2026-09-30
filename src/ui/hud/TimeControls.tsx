@@ -52,7 +52,8 @@ export function TimeControls() {
         <Icon name={stopped ? 'play' : 'pause'} size={17} filled={stopped} />
       </button>
 
-      <div className="sd-time__step" role="group" aria-label="Time speed">
+      <fieldset className="sd-time__step">
+        <legend className="sd-visually-hidden">Time speed</legend>
         <button
           type="button"
           className="sd-iconbtn"
@@ -68,7 +69,10 @@ export function TimeControls() {
           </span>
           <span className="sd-time__notches" aria-hidden="true">
             {TIME_SCALES.map((p, i) => (
-              <i key={p.secondsPerSecond} className={!stopped && i === index ? 'is-on' : undefined} />
+              <i
+                key={p.secondsPerSecond}
+                className={!stopped && i === index ? 'is-on' : undefined}
+              />
             ))}
           </span>
         </div>
@@ -77,11 +81,15 @@ export function TimeControls() {
           className="sd-iconbtn"
           aria-label="Faster"
           onClick={faster}
-          disabled={!stopped && index === TIME_SCALES.length - 1 && timeScale >= (TIME_SCALES[index]?.secondsPerSecond ?? 0)}
+          disabled={
+            !stopped &&
+            index === TIME_SCALES.length - 1 &&
+            timeScale >= (TIME_SCALES[index]?.secondsPerSecond ?? 0)
+          }
         >
           <Icon name="faster" size={16} />
         </button>
-      </div>
+      </fieldset>
 
       <time className="sd-time__date sd-mono" dateTime={date}>
         <span>{date}</span>

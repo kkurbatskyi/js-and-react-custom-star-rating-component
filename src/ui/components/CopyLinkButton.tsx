@@ -21,7 +21,6 @@ export function CopyLinkButton({ id, name, className }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const url = deepLinkUrl(formatToken(seed, id));
 
-  useEffect(() => setState('idle'), [id]);
   useEffect(() => {
     if (state === 'manual') input.current?.select();
     if (state !== 'copied') return;
@@ -33,7 +32,11 @@ export function CopyLinkButton({ id, name, className }: Props) {
     const result = await copyText(url);
     if (result === 'copied') {
       setState('copied');
-      pushToast({ text: 'Link copied', sub: `Anyone who opens it lands at ${name}.`, tone: 'success' });
+      pushToast({
+        text: 'Link copied',
+        sub: `Anyone who opens it lands at ${name}.`,
+        tone: 'success',
+      });
     } else {
       setState('manual');
     }
@@ -50,7 +53,12 @@ export function CopyLinkButton({ id, name, className }: Props) {
           onFocus={(e) => e.currentTarget.select()}
           className="sd-mono"
         />
-        <button type="button" className="sd-iconbtn" aria-label="Done" onClick={() => setState('idle')}>
+        <button
+          type="button"
+          className="sd-iconbtn"
+          aria-label="Done"
+          onClick={() => setState('idle')}
+        >
           <Icon name="check" />
         </button>
       </div>

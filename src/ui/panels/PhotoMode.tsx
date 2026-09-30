@@ -22,7 +22,12 @@ const slug = (s: string) =>
     .replace(/\s+/g, '-')
     .toLowerCase() || 'view';
 
-const stamp = (t: number) => new Date(t).toISOString().slice(0, 16).replace(/[-:T]/g, '').replace(/^(\d{8})/, '$1-');
+const stamp = (t: number) =>
+  new Date(t)
+    .toISOString()
+    .slice(0, 16)
+    .replace(/[-:T]/g, '')
+    .replace(/^(\d{8})/, '$1-');
 
 const canCopyImage = (): boolean =>
   typeof ClipboardItem !== 'undefined' && !!navigator.clipboard && 'write' in navigator.clipboard;
@@ -88,7 +93,11 @@ export function PhotoMode() {
       await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
       pushToast({ text: 'Image copied', tone: 'success' });
     } catch {
-      pushToast({ text: 'The clipboard would not take the image', sub: 'Right-click or long-press the picture to save it.', tone: 'warning' });
+      pushToast({
+        text: 'The clipboard would not take the image',
+        sub: 'Right-click or long-press the picture to save it.',
+        tone: 'warning',
+      });
     }
   };
 
@@ -119,12 +128,19 @@ export function PhotoMode() {
         <Modal onClose={() => setShot(null)} labelledBy="sd-shot-title" className="sd-shot">
           <header className="sd-dialog__head">
             <div>
-              <p className="sd-eyebrow">Photo · {new Date(shot.takenAt).toISOString().slice(0, 16).replace('T', ' ')} UTC</p>
+              <p className="sd-eyebrow">
+                Photo · {new Date(shot.takenAt).toISOString().slice(0, 16).replace('T', ' ')} UTC
+              </p>
               <h2 id="sd-shot-title" className="sd-dialog__title">
                 {shot.name}
               </h2>
             </div>
-            <button type="button" className="sd-iconbtn" aria-label="Close preview" onClick={() => setShot(null)}>
+            <button
+              type="button"
+              className="sd-iconbtn"
+              aria-label="Close preview"
+              onClick={() => setShot(null)}
+            >
               <Icon name="close" size={18} />
             </button>
           </header>

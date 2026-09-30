@@ -51,9 +51,19 @@ float galDiskRadial(float r) {
   return exp(-r * uGalInvRd) / (1.0 + exp(min((r - uGalRmax) * uGalInvEdge, 80.0)));
 }
 
-/** Planar dust with the visual filaments (multiply by sech^2(y/h_d) for the density). */
+/** Log-normal clumping of dust density d by a unit-variance-ish noise n (see galDustPlanar). */
+float galDustClumped(float d, float n) {
+  float k = uGalDustDetail;
+  return d * exp(k * n - 0.08 * k * k);
+}
+
+/**
+ * Planar dust with visual clumps (multiply by sech^2(y/h_d) for the density). Turbulent ISM
+ * densities are log-normal: exp(k n - k^2 s^2 / 2) with n ~ N(0, s^2), s ~ 0.4 (the filament
+ * noise), keeps the mean dust while opening clear gaps between dense clouds.
+ */
 float galDustPlanar(vec4 m) {
-  return m.g * max(0.0, 1.0 + uGalDustDetail * m.a);
+  return galDustClumped(m.g, m.a);
 }
 
 /** Flattened Plummer bulge + triaxial Gaussian bar; r2 = x^2 + z^2. */

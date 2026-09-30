@@ -8,8 +8,8 @@
 import { Vector3 } from 'three';
 import type { SelectionRef } from '../core/types';
 import type { Engine } from '../engine/Engine';
-import type { InputActions } from '../engine/input/InputController';
 import type { PointerKind } from '../engine/input/gestures';
+import type { InputActions } from '../engine/input/InputController';
 import type { PressAction } from '../engine/input/keys';
 import { stepTimeScale } from '../sim/time';
 import { store } from '../state/store';
@@ -28,7 +28,11 @@ function sameRef(a: SelectionRef | null, b: SelectionRef | null): boolean {
   return a === b || (!!a && !!b && a.kind === b.kind && a.id === b.id);
 }
 
-export function createInputActions(engine: Engine, canvas: HTMLElement, audio: AudioBridge | null): InputActions {
+export function createInputActions(
+  engine: Engine,
+  canvas: HTMLElement,
+  audio: AudioBridge | null,
+): InputActions {
   let cursor = '';
   const setCursor = (c: string): void => {
     if (c !== cursor) {

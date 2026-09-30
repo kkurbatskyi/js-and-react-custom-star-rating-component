@@ -46,10 +46,10 @@
 
   /* ── type ──────────────────────────────────────────────────────────────────────────── */
   --sd-font-display:
-    'Cormorant Garamond', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+    "Cormorant Garamond", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   --sd-font-ui:
-    'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-  --sd-font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --sd-font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sd-fs-2xs: 10px;
   --sd-fs-xs: 11px;
   --sd-fs-sm: 12.5px;
@@ -165,7 +165,7 @@
 .sd-root select,
 .sd-root textarea,
 .sd-root summary,
-.sd-root [role='slider'],
+.sd-root [role="slider"],
 .sd-root [data-sd-interactive] {
   pointer-events: auto;
 }
@@ -211,23 +211,19 @@
   background-clip: padding-box;
 }
 
-/* Reduced motion: honoured from the OS *and* from Settings (`data-motion="reduce"`). */
-@media (prefers-reduced-motion: reduce) {
-  .sd-root *,
-  .sd-root *::before,
-  .sd-root *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-.sd-root[data-motion='reduce'] *,
-.sd-root[data-motion='reduce'] *::before,
-.sd-root[data-motion='reduce'] *::after {
-  animation-duration: 0.001ms !important;
-  animation-iteration-count: 1 !important;
-  transition-duration: 0.001ms !important;
+/*
+ * Reduced motion: App sets `data-motion="reduce"` when the OS asks for it *or* the Settings switch is
+ * on, so one reset covers both. Components that animate also carry their own `prefers-reduced-motion`
+ * rule; this is the safety net.
+ */
+.sd-root[data-motion="reduce"] *,
+.sd-root[data-motion="reduce"] *::before,
+.sd-root[data-motion="reduce"] *::after {
+  /* biome-ignore lint/complexity/noImportantStyles: a reset has to beat every component's own animation rule */
+  animation: none !important;
+  /* biome-ignore lint/complexity/noImportantStyles: as above */
+  transition: none !important;
+  /* biome-ignore lint/complexity/noImportantStyles: as above */
   scroll-behavior: auto !important;
 }
 
@@ -253,7 +249,7 @@
   }
 }
 
-.sd-root[data-fx='low'] .sd-panel {
+.sd-root[data-fx="low"] .sd-panel {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background: var(--sd-panel-dense);
@@ -262,7 +258,7 @@
 /* Atlas-plate corner brackets. */
 .sd-ticked::before,
 .sd-ticked::after {
-  content: '';
+  content: "";
   position: absolute;
   width: 11px;
   height: 11px;
@@ -295,7 +291,7 @@
 .sd-mono {
   font-family: var(--sd-font-mono);
   font-variant-numeric: tabular-nums;
-  font-feature-settings: 'zero' 0;
+  font-feature-settings: "zero" 0;
 }
 
 /* Section heading: small-caps display face with a hairline that runs out to the count. */
@@ -310,7 +306,7 @@
   color: var(--sd-accent);
 }
 .sd-heading::after {
-  content: '';
+  content: "";
   order: 1;
   flex: 1;
   height: 1px;
@@ -329,7 +325,7 @@
   height: 8px;
   background:
     linear-gradient(to right, var(--sd-line-strong) 0 1px, transparent 1px) 0 100% / 40px 8px
-      repeat-x,
+    repeat-x,
     linear-gradient(to right, var(--sd-line) 0 1px, transparent 1px) 0 100% / 8px 4px repeat-x,
     linear-gradient(var(--sd-line), var(--sd-line)) 0 100% / 100% 1px no-repeat;
   -webkit-mask-image: linear-gradient(to right, #000 55%, transparent);
@@ -429,8 +425,8 @@
 .sd-iconbtn:active:not(:disabled) {
   background: var(--sd-accent-wash);
 }
-.sd-iconbtn[aria-pressed='true'],
-.sd-iconbtn[aria-expanded='true'] {
+.sd-iconbtn[aria-pressed="true"],
+.sd-iconbtn[aria-expanded="true"] {
   color: var(--sd-accent);
 }
 .sd-iconbtn:disabled {
@@ -486,7 +482,7 @@
 }
 
 .sd-visually-hidden {
-  position: absolute !important;
+  position: absolute;
   width: 1px;
   height: 1px;
   margin: -1px;

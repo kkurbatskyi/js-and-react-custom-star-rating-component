@@ -17,7 +17,7 @@ import {
   type WebGLCubeRenderTarget,
 } from 'three';
 import type { BodyBase } from '../../../core/types';
-import { type Quality, RENDER_ORDER, type PlanetUniforms, type VisualFrame } from '../../contracts';
+import { type PlanetUniforms, type Quality, RENDER_ORDER, type VisualFrame } from '../../contracts';
 import { common } from '../../shaders/common.glsl';
 import { noise } from '../../shaders/noise.glsl';
 import {
@@ -34,12 +34,12 @@ import { rockyFragment, rockyVertex } from './glsl/rocky.glsl';
 
 /** Sub-texel detail strength per style: tangent-slope amplitude and albedo modulation. */
 const DETAIL: Readonly<Record<RockyStyle, { slope: number; albedo: number }>> = {
-  biome: { slope: 0.09, albedo: 0.25 },
-  regolith: { slope: 0.16, albedo: 0.3 },
-  desert: { slope: 0.12, albedo: 0.25 },
-  icy: { slope: 0.05, albedo: 0.1 },
-  volcanic: { slope: 0.12, albedo: 0.3 },
-  dwarf: { slope: 0.1, albedo: 0.22 },
+  biome: { slope: 0.07, albedo: 0.18 },
+  regolith: { slope: 0.1, albedo: 0.2 },
+  desert: { slope: 0.075, albedo: 0.16 },
+  icy: { slope: 0.035, albedo: 0.07 },
+  volcanic: { slope: 0.08, albedo: 0.2 },
+  dwarf: { slope: 0.07, albedo: 0.16 },
 };
 
 const fragmentShader = `${common}\n${noise}\n${lightingGlsl}\n${rockyFragment}`;
@@ -63,19 +63,26 @@ export class RockySurface {
       uCamB: new Uniform(this.frame.camPos),
       uSunRadiance: new Uniform(this.sunRadiance),
       uIntensity: new Uniform(1),
-      uRadii: new Uniform(new Vector3(body.radiusKm, body.radiusKm * (1 - body.oblateness), body.radiusKm)),
+      uRadii: new Uniform(
+        new Vector3(body.radiusKm, body.radiusKm * (1 - body.oblateness), body.radiusKm),
+      ),
       uSunAng: new Uniform(0.0047),
       uOcc: new Uniform(this.frame.occluders),
       uOccCount: new Uniform(0),
       uRing: new Uniform(
         ring
-          ? new Vector4(ring.innerRadiusKm, ring.outerRadiusKm, ring.opticalDepth, (ring.seed % 997) / 97)
+          ? new Vector4(
+              ring.innerRadiusKm,
+              ring.outerRadiusKm,
+              ring.opticalDepth,
+              (ring.seed % 997) / 97,
+            )
           : new Vector4(0, 0, 0, 0),
       ),
       uTime: new Uniform(0),
       uSeed: new Uniform(new Vector3(look.seed[0], look.seed[1], look.seed[2])),
       uRelief: new Uniform(look.terrain.relief),
-      uBakeTexel: new Uniform((Math.PI / 2) / bakeSize),
+      uBakeTexel: new Uniform(Math.PI / 2 / bakeSize),
       uDetailOctaves: new Uniform(DETAIL_OCTAVES[quality]),
       uDetailSlope: new Uniform(detail.slope),
       uDetailAlbedo: new Uniform(detail.albedo),

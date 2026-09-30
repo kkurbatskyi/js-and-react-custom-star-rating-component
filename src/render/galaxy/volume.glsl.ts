@@ -34,44 +34,20 @@ vec3 viewRay(vec2 uv) {
 }
 `;
 
-export const marchFragment = /* glsl */ `
-precision highp float;
-precision highp sampler3D;
-${galaxyFields}
-${viewRay}
-uniform vec3 uCameraLy;
-uniform float uPixelAngle;
-uniform float uFrame;
-uniform int uSteps;
+/** Ray bounds and the deterministic dust column used as the upsampling guide (march + composite). */
+const dustGuide = /* glsl */ `
 uniform float uBoundR;
-uniform float uBoundY;
-uniform vec4 uStepK;       // kY, kR, kT, h
-uniform vec3 uStepLimits;  // dtMin, dtMax, r0
-uniform vec3 uColThin;
-uniform vec3 uColThinInner;
-uniform vec3 uColThick;
-uniform vec3 uColArm;
-uniform vec3 uColSpheroid;
-uniform vec3 uColHii;
-uniform float uMottle;
-uniform vec4 uLight;       // light per star: disk, arm, spheroid; colour-gradient radius (ly)
-uniform vec2 uKnee;        // knee (unscaled light), gamma
-uniform sampler3D uNoise;
-uniform vec3 uNear;        // near-dust strength, near-dust range (ly), emission near fade (ly)
 
-in vec2 vUv;
-out vec4 fragColor;
-
-/** Ray interval inside the slab |y| < uBoundY and the cylinder R < uBoundR (empty: x > y). */
-vec2 bounds(vec3 ro, vec3 rd) {
+/** Ray interval inside the slab |y| < halfY and the cylinder R < uBoundR (empty: x >= y). */
+vec2 slabBounds(vec3 ro, vec3 rd, float halfY) {
   float t0 = 0.0;
   float t1 = 1e30;
   if (abs(rd.y) > 1e-8) {
-    float a = (-uBoundY - ro.y) / rd.y;
-    float b = (uBoundY - ro.y) / rd.y;
+    float a = (-halfY - ro.y) / rd.y;
+    float b = (halfY - ro.y) / rd.y;
     t0 = max(t0, min(a, b));
     t1 = min(t1, max(a, b));
-  } else if (abs(ro.y) > uBoundY) {
+  } else if (abs(ro.y) > halfY) {
     return vec2(1.0, 0.0);
   }
   float a = dot(rd.xz, rd.xz);
@@ -90,11 +66,74 @@ vec2 bounds(vec3 ro, vec3 rd) {
   return vec2(t0, t1);
 }
 
+/**
+ * Green optical depth of the (planar, clumped) dust along a ray: 12 stratified sub-segments of
+ * the dust slab, the vertical sech^2 integrated analytically per sub-segment. Deterministic, so
+ * the low-res march and the full-res composite agree where the dust is smooth.
+ */
+float dustGuideTau(vec3 ro, vec3 rd, float pixelAngle) {
+  vec2 span = slabBounds(ro, rd, 4.0 / uGalInvHDust);
+  if (span.x >= span.y) return 0.0;
+  float ds = min(span.y - span.x, 3e5) / 12.0;
+  float horizontal = length(rd.xz);
+  float column = 0.0;
+  for (int k = 0; k < 12; k++) {
+    float ta = span.x + ds * float(k);
+    float tm = ta + 0.5 * ds;
+    vec3 q = ro + rd * tm;
+    float lod = galMapLod(max(tm * pixelAngle, 0.5 * ds * horizontal));
+    column += galDustPlanar(galMap(q.xz, lod))
+      * galSech2Segment(ro.y + rd.y * ta, ro.y + rd.y * (ta + ds), ds, uGalInvHDust);
+  }
+  return column * uGalExtinction.g;
+}
+`;
+
+export const marchFragment = /* glsl */ `
+precision highp float;
+precision highp sampler3D;
+${galaxyFields}
+${viewRay}
+${dustGuide}
+uniform vec3 uCameraLy;
+uniform float uPixelAngle;
+uniform float uFrame;
+uniform int uSteps;
+uniform float uBoundY;
+uniform vec4 uStepK;       // kY, kR, kT, h
+uniform vec3 uStepLimits;  // dtMin, dtMax, r0
+uniform vec3 uColThin;
+uniform vec3 uColThinInner;
+uniform vec3 uColThick;
+uniform vec3 uColArm;
+uniform vec3 uColArmInner;
+uniform vec2 uArmDetail;   // arm mottling by the filament noise, beading by star-forming clumps
+uniform vec3 uColSpheroid;
+uniform vec3 uColHii;
+uniform float uMottle;
+uniform vec4 uLight;       // light per star: disk, arm, spheroid; colour-gradient radius (ly)
+uniform vec2 uKnee;        // knee (unscaled light), gamma
+uniform sampler3D uNoise;
+uniform vec3 uNear;        // 3D-clump weight at the camera, its fade range (ly), emission near fade (ly)
+
+in vec2 vUv;
+layout(location = 0) out vec4 fragColor;
+layout(location = 1) out vec4 fragGuide;
+
 /** Emission (radiance per ly) and extinction (per ly) at p; dist = distance from the camera. */
 void galaxySample(vec3 p, float lod, float dist, out vec3 emission, out vec3 extinction) {
   float r2 = dot(p.xz, p.xz);
   float r = sqrt(r2);
   vec4 m = galMap(p.xz, lod);
+  // Clumping/mottling noise: the map's planar filaments far away; within a few kly a true 3D
+  // noise instead. The map's fields are planar x sech^2, so seen from nearby every feature would be
+  // a vertical column (stripes in the sky, curtains below the camera).
+  float n = m.a;
+  float near = uNear.x * exp(-dist / uNear.y);
+  if (near > 0.01) {
+    float n3 = 0.6 * texture(uNoise, p * (1.0 / 1730.0)).r + 0.4 * texture(uNoise, p.zyx * (1.0 / 410.0)).r;
+    n = mix(n, 3.0 * (n3 - 0.5), min(near, 1.0));
+  }
   float disk = galDiskRadial(r);
   float ay = abs(p.y);
   float armV = galSech2(ay * uGalInvHArm);
@@ -105,19 +144,16 @@ void galaxySample(vec3 p, float lod, float dist, out vec3 emission, out vec3 ext
   // Highlight compression on the light emissivity (identical to the particles' fluxes).
   float light = uLight.x * (thin + thick) + uLight.y * arm + uLight.z * sph;
   float squeeze = light > uKnee.x ? pow(light / uKnee.x, uKnee.y - 1.0) : 1.0;
-  // Old, metal-rich inner disk is warmer: blend the thin-disk colour with radius.
-  vec3 thinColor = mix(uColThinInner, uColThin, smoothstep(0.0, uLight.w, r));
   // Unresolved light near the camera belongs to the starfield layer: fade it like the particles.
-  squeeze *= smoothstep(0.15 * uNear.z, uNear.z, dist);
-  emission = squeeze * (thinColor * (thin * max(0.0, 1.0 - uMottle * m.a)) + uColThick * thick
-    + uColArm * arm + uColSpheroid * sph + uColHii * (disk * m.b * armV));
-  float dust = galDustPlanar(m) * galSech2(ay * uGalInvHDust);
-  // Near the camera the map is too coarse: add 3D cloud structure that fades with distance.
-  float near = uNear.x * exp(-dist / uNear.y);
-  if (near > 0.01 && dust > 0.0) {
-    float n = 0.62 * texture(uNoise, p * (1.0 / 1400.0)).r + 0.38 * texture(uNoise, p * (1.0 / 330.0)).r;
-    dust *= mix(1.0, 2.4 * smoothstep(0.3, 0.78, n), near);
-  }
+  squeeze *= smoothstep(0.3 * uNear.z, uNear.z, dist);
+  // Old, metal-rich inner disk is warmer, and its arms older: blend both colours with radius.
+  float outer = smoothstep(0.0, uLight.w, r);
+  vec3 thinColor = mix(uColThinInner, uColThin, outer);
+  vec3 armColor = mix(uColArmInner, uColArm, outer);
+  float armLight = arm * max(0.0, 1.0 - uArmDetail.x * n) + disk * uGalArmStrength * armV * m.b * uArmDetail.y;
+  emission = squeeze * (thinColor * (thin * max(0.0, 1.0 - uMottle * n)) + uColThick * thick
+    + armColor * armLight + uColSpheroid * sph + uColHii * (disk * m.b * armV));
+  float dust = galDustClumped(m.g, n) * galSech2(ay * uGalInvHDust);
   extinction = uGalExtinction * dust;
 }
 
@@ -129,7 +165,8 @@ float ign(vec2 px) {
 void main() {
   vec3 ro = uCameraLy;
   vec3 rd = viewRay(vUv);
-  vec2 span = bounds(ro, rd);
+  fragGuide = vec4(dustGuideTau(ro, rd, uPixelAngle), 0.0, 0.0, 1.0);
+  vec2 span = slabBounds(ro, rd, uBoundY);
   if (span.x >= span.y) {
     fragColor = vec4(0.0, 0.0, 0.0, 1e3);
     return;
@@ -219,11 +256,42 @@ void main() {
 
 export const compositeFragment = /* glsl */ `
 precision highp float;
-uniform sampler2D uVolume;
+${galaxyFields}
+${viewRay}
+${dustGuide}
+uniform sampler2D uVolume;   // resolved radiance, low resolution
+uniform sampler2D uGuide;    // low-res dust optical depth (this frame's march)
+uniform vec3 uCameraLy;
+uniform float uPixelAngleFull;
+uniform float uGuided;
 uniform float uGain;
 in vec2 vUv;
 out vec4 fragColor;
+
 void main() {
-  fragColor = vec4(texture(uVolume, vUv).rgb * uGain, 1.0);
+  if (uGuided < 0.5) {
+    fragColor = vec4(texture(uVolume, vUv).rgb * uGain, 1.0);
+    return;
+  }
+  // Joint bilateral upsampling guided by dust: the 2x2 low-res taps are weighted by how similar
+  // their optical depth is to this pixel's, so lane edges stay sharp at full resolution.
+  float tau = dustGuideTau(uCameraLy, viewRay(vUv), uPixelAngleFull);
+  ivec2 size = textureSize(uVolume, 0);
+  vec2 st = vUv * vec2(size) - 0.5;
+  vec2 base = floor(st);
+  vec2 f = st - base;
+  vec3 sum = vec3(0.0);
+  float wSum = 0.0;
+  for (int j = 0; j < 2; j++) {
+    for (int i = 0; i < 2; i++) {
+      ivec2 c = clamp(ivec2(base) + ivec2(i, j), ivec2(0), size - 1);
+      float tapTau = texelFetch(uGuide, c, 0).r;
+      float bilinear = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y);
+      float w = bilinear * exp(-2.0 * abs(tapTau - tau)) + 1e-5;
+      sum += texelFetch(uVolume, c, 0).rgb * w;
+      wSum += w;
+    }
+  }
+  fragColor = vec4(sum / wSum * uGain, 1.0);
 }
 `;

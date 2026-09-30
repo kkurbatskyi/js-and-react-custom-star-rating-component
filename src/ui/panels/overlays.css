@@ -10,8 +10,7 @@
   overflow: hidden;
   color: var(--sd-accent);
   background:
-    radial-gradient(70% 60% at 50% 46%, rgb(20 28 48 / 0.7), transparent 70%),
-    var(--sd-ink);
+    radial-gradient(70% 60% at 50% 46%, rgb(20 28 48 / 0.7), transparent 70%), var(--sd-ink);
   pointer-events: auto;
   transition:
     opacity 700ms var(--sd-ease-in-out),
@@ -37,13 +36,16 @@
   gap: var(--sd-s-4);
   width: min(340px, 84%);
 }
-.sd-astro {
-  position: absolute;
-  top: -58px;
-  left: 50%;
+.sd-loading__orrery {
+  position: relative;
   width: 200px;
   height: 200px;
-  margin-left: -100px;
+}
+.sd-astro {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   color: var(--sd-accent);
   opacity: 0.9;
 }
@@ -58,10 +60,10 @@
   }
 }
 .sd-loading__mark {
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
-  height: 84px;
-  margin-top: 30px;
   animation: sd-breathe 4.2s var(--sd-ease-in-out) infinite;
 }
 @keyframes sd-breathe {
@@ -76,7 +78,7 @@
   }
 }
 .sd-loading__word {
-  margin: 44px 0 0;
+  margin: 8px 0 0;
   font: 500 46px / 1 var(--sd-font-display);
   font-variant-caps: all-small-caps;
   letter-spacing: var(--sd-track-wide);
@@ -130,27 +132,32 @@
 }
 
 /* ── first-run field notes ─────────────────────────────────────────────────────────────── */
+/* Centred in the area the info panel leaves free, clear of the camera buttons and the bottom row. */
 .sd-note {
   position: absolute;
   z-index: var(--sd-z-note);
-  left: 50%;
+  left: calc(var(--sd-inset) + var(--sd-safe-l) + 56px);
+  right: calc(var(--sd-right-inset) + var(--sd-inset));
   bottom: calc(var(--sd-inset) + var(--sd-safe-b) + 196px);
-  width: min(560px, calc(100% - 2 * var(--sd-inset)));
+  width: auto;
+  max-width: 560px;
+  max-height: calc(100% - var(--sd-topbar-h) - 196px - var(--sd-inset) - var(--sd-s-4));
+  margin-inline: auto;
+  overflow: auto;
   display: grid;
   gap: var(--sd-s-3);
   padding: 16px 18px 18px 22px;
-  transform: translateX(-50%);
   background: var(--sd-panel-dense);
   animation: sd-note-in 520ms var(--sd-ease) both;
 }
 @keyframes sd-note-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 14px);
+    transform: translateY(14px);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, 0);
+    transform: none;
   }
 }
 .sd-note__head {
@@ -203,28 +210,42 @@
 .sd-note__go {
   justify-self: start;
 }
+/* Short windows: keep the icons and titles, drop the small print. */
+@container sd (max-height: 660px) {
+  .sd-note {
+    gap: var(--sd-s-2);
+    padding: 12px 16px 14px 20px;
+  }
+  .sd-note__title {
+    font-size: 22px;
+  }
+  .sd-note__tips li strong + span {
+    display: none;
+  }
+  .sd-note__tips li {
+    align-items: center;
+  }
+}
 @container sd (max-width: 720px) {
   .sd-note {
+    left: var(--sd-inset);
+    right: var(--sd-inset);
     bottom: auto;
     top: calc(var(--sd-topbar-h) + var(--sd-s-2));
-    padding: 14px 14px 16px 18px;
+    max-width: none;
     max-height: calc(100% - var(--sd-topbar-h) - var(--sd-s-4));
-    overflow: auto;
+    margin: 0;
+    padding: 14px 14px 16px 18px;
   }
   .sd-note__tips {
     grid-template-columns: 1fr;
     gap: var(--sd-s-3);
   }
-  .sd-note__tips li {
-    align-items: center;
+  .sd-note__tips li strong + span {
+    display: inline;
   }
   .sd-note__go {
     justify-self: stretch;
-  }
-}
-@container sd (max-height: 560px) and (min-width: 721px) {
-  .sd-note {
-    bottom: var(--sd-inset);
   }
 }
 

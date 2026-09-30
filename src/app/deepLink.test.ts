@@ -8,7 +8,10 @@ describe('deep links', () => {
       seed: null,
       target: { kind: 'star', id: '1.399.0.-276.0' },
     });
-    expect(parseDeepLink('8.-2.113.7.4.c')?.target).toEqual({ kind: 'planet', id: '8.-2.113.7.4.c' });
+    expect(parseDeepLink('8.-2.113.7.4.c')?.target).toEqual({
+      kind: 'planet',
+      id: '8.-2.113.7.4.c',
+    });
     expect(parseDeepLink('#1.399.0.-276.0.d.1')?.target).toEqual({
       kind: 'moon',
       id: '1.399.0.-276.0.d.1',
@@ -16,11 +19,22 @@ describe('deep links', () => {
   });
 
   it('parses a seed prefix', () => {
-    expect(parseDeepLink('#42~1.2.3.4.5')).toEqual({ seed: 42, target: { kind: 'star', id: '1.2.3.4.5' } });
+    expect(parseDeepLink('#42~1.2.3.4.5')).toEqual({
+      seed: 42,
+      target: { kind: 'star', id: '1.2.3.4.5' },
+    });
   });
 
   it('rejects malformed tokens', () => {
-    for (const bad of ['', '#', '#hello', '#1.2.3', '#x~1.2.3.4.5', '#01~1.2.3.4.5', '#1.2.3.4.5.A'])
+    for (const bad of [
+      '',
+      '#',
+      '#hello',
+      '#1.2.3',
+      '#x~1.2.3.4.5',
+      '#01~1.2.3.4.5',
+      '#1.2.3.4.5.A',
+    ])
       expect(parseDeepLink(bad)).toBeNull();
   });
 

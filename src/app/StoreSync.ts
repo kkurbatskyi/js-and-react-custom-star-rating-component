@@ -8,18 +8,19 @@
  *
  * Also keeps `location.hash` in sync with where we are (or are heading), and follows `hashchange`.
  */
+
+import { Vector3 } from 'three';
 import { formatLy } from '../core/format';
 import type { FocusTarget, Vec3Tuple, ViewLevel } from '../core/types';
 import { damp } from '../engine/camera/damping';
 import type { FocusHandle } from '../engine/camera/focus';
 import { relativeKm } from '../engine/camera/frames';
-import type { EngineHooks, Engine } from '../engine/Engine';
 import type { FrameInfo } from '../engine/contracts';
+import type { Engine, EngineHooks } from '../engine/Engine';
 import type { Settings } from '../state/contracts';
 import { store } from '../state/store';
 import { getUniverse } from '../universe';
 import type { Universe } from '../universe/contracts';
-import { Vector3 } from 'three';
 import { formatDeepLink, parseDeepLink, writeHash } from './deepLink';
 
 const STORE_INTERVAL_MS = 100;
@@ -131,7 +132,11 @@ export class StoreSync implements EngineHooks {
     const s = store.getState();
     const ok = this.engine.navigate(target, mode, s.settings.reducedMotion);
     if (!ok) {
-      s.pushToast({ text: 'Nothing is there', sub: 'That object does not exist in this galaxy.', tone: 'warning' });
+      s.pushToast({
+        text: 'Nothing is there',
+        sub: 'That object does not exist in this galaxy.',
+        tone: 'warning',
+      });
       return;
     }
     if (mode === 'fly') {
@@ -164,7 +169,9 @@ export class StoreSync implements EngineHooks {
   }
 
   private focusChanged(focus: FocusHandle): void {
-    store.getState().setFromEngine({ focus: focus.target, flightTarget: null, flightProgress: null });
+    store
+      .getState()
+      .setFromEngine({ focus: focus.target, flightTarget: null, flightProgress: null });
   }
 
   private distanceToFocus(): number {
@@ -178,7 +185,8 @@ export class StoreSync implements EngineHooks {
     this.settings = next;
     const e = this.engine;
     if (!prev || prev.quality !== next.quality) e.setQualitySetting(next.quality);
-    if (!prev || prev.bloom !== next.bloom) e.post.setBloom({ intensity: next.bloom * BLOOM_SCALE });
+    if (!prev || prev.bloom !== next.bloom)
+      e.post.setBloom({ intensity: next.bloom * BLOOM_SCALE });
     e.rig.autoRotate = next.autoRotate;
     e.rig.autoRotateRate = next.reducedMotion ? 0.004 : 0.018;
     if (prev && prev.galaxySeed !== next.galaxySeed) {

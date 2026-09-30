@@ -35,7 +35,11 @@ function bodyById(id: string): PickedBody | null {
   const resolved = id.startsWith('home.') ? `${home}.${id.slice(5)}` : id;
   const found = u.getBody(resolved);
   if (!found) return null;
-  return { body: found.moon ?? found.planet, system: found.system, planetIndex: found.moon ? -1 : found.planet.index };
+  return {
+    body: found.moon ?? found.planet,
+    system: found.system,
+    planetIndex: found.moon ? -1 : found.planet.index,
+  };
 }
 
 /** All bodies (planets and moons) of the home system and its neighbourhood, home first. */
@@ -43,7 +47,10 @@ export function nearbyBodies(limit = 400): PickedBody[] {
   const u = getUniverse();
   const out: PickedBody[] = [];
   const seen = new Set<string>();
-  const ids = [u.homeStarId(), ...u.queryStars(u.galaxy.params.homeLy, 60, { limit }).map((r) => r.id)];
+  const ids = [
+    u.homeStarId(),
+    ...u.queryStars(u.galaxy.params.homeLy, 60, { limit }).map((r) => r.id),
+  ];
   for (const id of ids) {
     if (seen.has(id)) continue;
     seen.add(id);
@@ -67,7 +74,14 @@ export function pickBody(params: URLSearchParams): PickedBody {
   const type = params.get('type');
   if (isPlanetType(type)) {
     const n = Number(params.get('n') ?? params.get('seed') ?? 0);
-    const matches = nearbyBodies().filter((b) => b.body.type === type);
+    const life = params.get('life');
+    const lit = params.get('lights') === '1';
+    const matches = nearbyBodies().filter(
+      (b) =>
+        b.body.type === type &&
+        (life === null || b.body.life === life) &&
+        (!lit || b.body.appearance.nightLights > 0),
+    );
     // Prefer bodies of Aurelia (hand-authored) first, then the neighbourhood.
     const pick = matches[((Math.floor(n) % matches.length) + matches.length) % matches.length];
     if (pick) return pick;

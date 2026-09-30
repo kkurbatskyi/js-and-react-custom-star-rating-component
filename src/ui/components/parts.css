@@ -24,7 +24,7 @@
   white-space: nowrap;
 }
 .sd-spec dt::after {
-  content: '';
+  content: "";
   flex: 1;
   min-width: 12px;
   height: 0;
@@ -136,19 +136,24 @@
   box-shadow: var(--sd-shadow-pop);
   animation: sd-rise var(--sd-dur-3) var(--sd-ease) both;
 }
-.sd-modal[data-variant='top'] {
+.sd-modal__dialog:focus,
+.sd-modal__dialog:focus-visible {
+  outline: none;
+  box-shadow: var(--sd-shadow-pop);
+}
+.sd-modal[data-variant="top"] {
   align-items: flex-start;
   padding-top: clamp(56px, 13vh, 140px);
 }
-.sd-modal[data-variant='left'] {
+.sd-modal[data-variant="left"] {
   justify-content: flex-start;
   align-items: stretch;
   padding: calc(var(--sd-topbar-h) + var(--sd-s-2)) var(--sd-s-4) var(--sd-s-4);
 }
-.sd-modal[data-variant='left'] .sd-modal__scrim {
+.sd-modal[data-variant="left"] .sd-modal__scrim {
   background: linear-gradient(to right, rgb(3 5 10 / 0.55), rgb(3 5 10 / 0.1) 60%, transparent);
 }
-.sd-modal[data-variant='left'] .sd-modal__dialog {
+.sd-modal[data-variant="left"] .sd-modal__dialog {
   animation-name: sd-slide-left;
 }
 @keyframes sd-slide-left {
@@ -166,23 +171,23 @@
   .sd-modal {
     padding: 0;
   }
-  .sd-modal__dialog {
+  .sd-modal .sd-modal__dialog {
     width: 100%;
-    max-width: none !important;
+    max-width: none;
     height: 100%;
     max-height: none;
     border-radius: 0;
     padding-top: var(--sd-safe-t);
     padding-bottom: var(--sd-safe-b);
   }
-  .sd-modal[data-variant='top'] {
+  .sd-modal[data-variant="top"] {
     padding: 0;
   }
-  .sd-modal[data-variant='top'] .sd-modal__dialog {
+  .sd-modal[data-variant="top"] .sd-modal__dialog {
     height: auto;
     max-height: 100%;
   }
-  .sd-modal[data-variant='left'] {
+  .sd-modal[data-variant="left"] {
     padding: 0;
   }
 }

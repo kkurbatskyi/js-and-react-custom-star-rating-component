@@ -132,7 +132,9 @@ describe('StarRating — read-only', () => {
     expect(
       screen.getByRole('img', { name: "Surveyor's rating for Halcyon: 3.5 of 5 stars" }),
     ).toBeTruthy();
-    const fills = [...container.querySelectorAll('.sd-star')].map((s) => s.getAttribute('data-fill'));
+    const fills = [...container.querySelectorAll('.sd-star')].map((s) =>
+      s.getAttribute('data-fill'),
+    );
     expect(fills).toEqual(['1', '1', '1', '0.5', '0']);
     expect(container.textContent).toContain('3.5');
   });

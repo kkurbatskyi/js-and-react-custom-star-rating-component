@@ -21,9 +21,9 @@ import { createRng } from '../src/core/rng';
 import type { FocusTarget, SelectionRef } from '../src/core/types';
 import { registerEngineCommands } from '../src/state/bridge';
 import { store } from '../src/state/store';
-import { getUniverse } from '../src/universe';
 import { App } from '../src/ui/App';
 import { useSheetStore } from '../src/ui/lib/sheetStore';
+import { getUniverse } from '../src/universe';
 
 declare global {
   interface Window {
@@ -118,9 +118,23 @@ function paintBackdrop(canvas: HTMLCanvasElement, w: number, h: number) {
 
 const mobile = flag('mobile');
 const host = document.createElement('div');
-Object.assign(host.style, mobile
-  ? { position: 'absolute', left: '50%', top: '50%', width: '390px', height: '844px', transform: 'translate(-50%, -50%)', overflow: 'hidden', border: '1px solid #2a2f3a', borderRadius: '28px', background: '#000' }
-  : { position: 'fixed', inset: '0', overflow: 'hidden' });
+Object.assign(
+  host.style,
+  mobile
+    ? {
+        position: 'absolute',
+        left: '50%',
+        top: '50%',
+        width: '390px',
+        height: '844px',
+        transform: 'translate(-50%, -50%)',
+        overflow: 'hidden',
+        border: '1px solid #2a2f3a',
+        borderRadius: '28px',
+        background: '#000',
+      }
+    : { position: 'fixed', inset: '0', overflow: 'hidden' },
+);
 document.body.appendChild(host);
 
 const canvas = document.createElement('canvas');
@@ -130,7 +144,12 @@ const bounds = () => host.getBoundingClientRect();
 paintBackdrop(canvas, bounds().width, bounds().height);
 
 const appRoot = document.createElement('div');
-Object.assign(appRoot.style, { position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '1' });
+Object.assign(appRoot.style, {
+  position: 'absolute',
+  inset: '0',
+  pointerEvents: 'none',
+  zIndex: '1',
+});
 host.appendChild(appRoot);
 
 // ── mock engine ─────────────────────────────────────────────────────────────────────────────
@@ -149,11 +168,19 @@ const SELECTIONS: Record<string, { ref: SelectionRef | null; focus: FocusTarget 
   moon: lanthorn
     ? { ref: { kind: 'moon', id: lanthorn.id }, focus: { kind: 'moon', id: lanthorn.id } }
     : { ref: null, focus: { kind: 'galaxy', centerLy: [0, 0, 0] } },
-  core: { ref: { kind: 'star', id: universe.coreStarId() }, focus: { kind: 'star', id: universe.coreStarId() } },
+  core: {
+    ref: { kind: 'star', id: universe.coreStarId() },
+    focus: { kind: 'star', id: universe.coreStarId() },
+  },
   neutron: (() => {
-    const near = universe.queryStars(universe.galaxy.params.homeLy, 60, { limit: 400 }).find((s) => s.kind === 'neutron-star' || s.kind === 'white-dwarf');
+    const near = universe
+      .queryStars(universe.galaxy.params.homeLy, 60, { limit: 400 })
+      .find((s) => s.kind === 'neutron-star' || s.kind === 'white-dwarf');
     const id = near?.id ?? homeId;
-    return { ref: { kind: 'star', id } as SelectionRef, focus: { kind: 'star', id } as FocusTarget };
+    return {
+      ref: { kind: 'star', id } as SelectionRef,
+      focus: { kind: 'star', id } as FocusTarget,
+    };
   })(),
 };
 
@@ -183,21 +210,43 @@ if (params.get('data') !== 'empty') {
   });
 }
 
-const focusPoint = sel.focus.kind === 'galaxy' ? sel.focus.centerLy : (universe.getRecord(sel.ref?.id.split('.').slice(0, 5).join('.') ?? homeId)?.posLy ?? [0, 0, 0]);
-const distance = params.get('dist') ? Number(params.get('dist')) : sel.focus.kind === 'galaxy' ? 1.4e18 : sel.focus.kind === 'star' ? 2.4e9 : sel.focus.kind === 'planet' ? 2.1e4 : 4.6e3;
+const focusPoint =
+  sel.focus.kind === 'galaxy'
+    ? sel.focus.centerLy
+    : (universe.getRecord(sel.ref?.id.split('.').slice(0, 5).join('.') ?? homeId)?.posLy ?? [
+        0, 0, 0,
+      ]);
+const distance = params.get('dist')
+  ? Number(params.get('dist'))
+  : sel.focus.kind === 'galaxy'
+    ? 1.4e18
+    : sel.focus.kind === 'star'
+      ? 2.4e9
+      : sel.focus.kind === 'planet'
+        ? 2.1e4
+        : 4.6e3;
 const loading = params.get('loading');
 store.setState({
   ready: loading === null,
-  boot: { progress: loading === null ? 1 : Number(loading), message: 'Compiling the shaders that draw the stars…' },
+  boot: {
+    progress: loading === null ? 1 : Number(loading),
+    message: 'Compiling the shaders that draw the stars…',
+  },
   level: sel.focus.kind === 'galaxy' ? 'galaxy' : sel.focus.kind === 'star' ? 'system' : 'planet',
   focus: sel.focus,
   selection: sel.ref,
   cameraDistanceKm: distance,
-  cameraLy: sel.focus.kind === 'galaxy' ? [0, 62000, 4000] : [focusPoint[0], focusPoint[1], focusPoint[2]],
+  cameraLy:
+    sel.focus.kind === 'galaxy' ? [0, 62000, 4000] : [focusPoint[0], focusPoint[1], focusPoint[2]],
   simDays: Date.now() / 86_400_000 - 10957.5,
   flightProgress: params.get('flight') ? Number(params.get('flight')) : null,
   flightTarget: params.get('flight') ? sel.focus : null,
-  hover: params.get('hover') === 'planet' ? { kind: 'planet', id: giant.id } : params.get('hover') === 'star' ? { kind: 'star', id: homeId } : null,
+  hover:
+    params.get('hover') === 'planet'
+      ? { kind: 'planet', id: giant.id }
+      : params.get('hover') === 'star'
+        ? { kind: 'star', id: homeId }
+        : null,
   ui: {
     ...s.ui,
     onboardingSeen: !flag('onboard'),
@@ -208,14 +257,27 @@ store.setState({
       logbook: false,
       settings: false,
       help: false,
-      ...Object.fromEntries((params.get('open') ?? '').split(',').filter(Boolean).map((k) => [k, true])),
+      ...Object.fromEntries(
+        (params.get('open') ?? '')
+          .split(',')
+          .filter(Boolean)
+          .map((k) => [k, true]),
+      ),
     },
   },
 });
 useSheetStore.getState().setFull(params.get('sheet') === 'full');
 if (flag('toast')) {
-  store.getState().pushToast({ text: 'Link copied', sub: 'Anyone who opens it lands at Halcyon.', tone: 'success' });
-  store.getState().pushToast({ text: 'Setting course for Kiranth', sub: 'A ringed giant · Aurelia', tone: 'info' });
+  store.getState().pushToast({
+    text: 'Link copied',
+    sub: 'Anyone who opens it lands at Halcyon.',
+    tone: 'success',
+  });
+  store.getState().pushToast({
+    text: 'Setting course for Kiranth',
+    sub: 'A ringed giant · Aurelia',
+    tone: 'info',
+  });
   store.getState().pushToast({ text: 'Could not capture this view', tone: 'warning' });
 }
 
@@ -245,29 +307,73 @@ function control(label: string, fn: () => void): HTMLButtonElement {
   const b = document.createElement('button');
   b.textContent = label;
   b.onclick = fn;
-  Object.assign(b.style, { font: '11px ui-monospace, monospace', padding: '3px 7px', background: '#141a26', color: '#cfd6e6', border: '1px solid #2b3446', borderRadius: '3px', cursor: 'pointer' });
+  Object.assign(b.style, {
+    font: '11px ui-monospace, monospace',
+    padding: '3px 7px',
+    background: '#141a26',
+    color: '#cfd6e6',
+    border: '1px solid #2b3446',
+    borderRadius: '3px',
+    cursor: 'pointer',
+  });
   return b;
 }
 if (params.get('panel') !== '0') {
   const bar = document.createElement('div');
-  Object.assign(bar.style, { position: 'fixed', left: '50%', bottom: '4px', transform: 'translateX(-50%)', zIndex: '1000', display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'center', maxWidth: '96vw', padding: '4px', background: 'rgb(0 0 0 / .55)', borderRadius: '4px' });
+  Object.assign(bar.style, {
+    position: 'fixed',
+    left: '50%',
+    bottom: '4px',
+    transform: 'translateX(-50%)',
+    zIndex: '1000',
+    display: 'flex',
+    gap: '4px',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    maxWidth: '96vw',
+    padding: '4px',
+    background: 'rgb(0 0 0 / .55)',
+    borderRadius: '4px',
+  });
   for (const k of Object.keys(SELECTIONS)) {
-    bar.append(control(k, () => {
-      const c = SELECTIONS[k];
-      if (!c) return;
-      store.setState({ selection: c.ref, focus: c.focus });
-    }));
+    bar.append(
+      control(k, () => {
+        const c = SELECTIONS[k];
+        if (!c) return;
+        store.setState({ selection: c.ref, focus: c.focus });
+      }),
+    );
   }
-  for (const k of ['search', 'logbook', 'settings', 'help'] as const) bar.append(control(k, () => store.getState().togglePanel(k)));
+  for (const k of ['search', 'logbook', 'settings', 'help'] as const)
+    bar.append(control(k, () => store.getState().togglePanel(k)));
   bar.append(control('photo', () => store.getState().setPhotoMode(true)));
-  bar.append(control('toast', () => store.getState().pushToast({ text: 'A toast', sub: 'With a sub-line', tone: 'info' })));
-  bar.append(control(mobile ? 'desktop' : 'mobile', () => {
-    const u = new URL(location.href);
-    if (mobile) u.searchParams.delete('mobile'); else u.searchParams.set('mobile', '1');
-    location.href = u.toString();
-  }));
+  bar.append(
+    control('toast', () =>
+      store.getState().pushToast({ text: 'A toast', sub: 'With a sub-line', tone: 'info' }),
+    ),
+  );
+  bar.append(
+    control(mobile ? 'desktop' : 'mobile', () => {
+      const u = new URL(location.href);
+      if (mobile) u.searchParams.delete('mobile');
+      else u.searchParams.set('mobile', '1');
+      location.href = u.toString();
+    }),
+  );
   document.body.appendChild(bar);
 }
+
+// The engine owns Space (pause) and H (photo mode); stand in for it so this page behaves like the app.
+window.addEventListener('keydown', (e) => {
+  if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+  const target = e.target as Element | null;
+  if (target?.closest('input, textarea, select, [role="combobox"]')) return;
+  if (e.key === ' ' && target?.closest('button, a, summary, [role="radio"], [role="tab"]')) return;
+  const st = store.getState();
+  if (e.key === ' ') st.togglePause();
+  else if (e.key === 'h' && !Object.values(st.ui.open).some(Boolean))
+    st.setPhotoMode(!st.ui.photoMode);
+});
 
 // Handy for `shot.mjs --eval`: type into the palette, poke the store.
 window.__UI__ = {

@@ -44,10 +44,9 @@
 
 /* Generous hit area that tiles without overlapping (≥ 44px tall on touch). */
 button.sd-star::before {
-  content: '';
+  content: "";
   position: absolute;
-  inset: calc((var(--sd-hit, 34px) - var(--sd-star-size)) / -2)
-    calc(var(--sd-star-size) * -0.07);
+  inset: calc((var(--sd-hit, 34px) - var(--sd-star-size)) / -2) calc(var(--sd-star-size) * -0.07);
 }
 
 .sd-star svg {

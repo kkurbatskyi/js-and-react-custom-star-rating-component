@@ -14,7 +14,12 @@ export function ViewControls() {
   const goUp = useStore((s) => s.goUp);
   const setPhotoMode = useStore((s) => s.setPhotoMode);
   return (
-    <div className="sd-viewctl sd-panel" role="toolbar" aria-label="Camera" aria-orientation="vertical">
+    <div
+      className="sd-viewctl sd-panel"
+      role="toolbar"
+      aria-label="Camera"
+      aria-orientation="vertical"
+    >
       <Btn icon="plus" label="Zoom in" onClick={() => engineCommands().zoomBy(0.5)} />
       <Btn icon="minus" label="Zoom out" onClick={() => engineCommands().zoomBy(2)} />
       <span className="sd-viewctl__sep" />

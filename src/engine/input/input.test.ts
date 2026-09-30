@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { type Gesture, GestureRecognizer, type PointerInput } from './gestures';
 import { heldAction, isInteractiveTarget, pressAction, wheelZoomFactor } from './keys';
 
-const p = (id: number, x: number, y: number, t: number, extra: Partial<PointerInput> = {}): PointerInput => ({
+const p = (
+  id: number,
+  x: number,
+  y: number,
+  t: number,
+  extra: Partial<PointerInput> = {},
+): PointerInput => ({
   id,
   x,
   y,
@@ -81,7 +87,10 @@ describe('keys', () => {
   });
 
   it('leaves typing and control activation alone', () => {
-    const el = (tagName: string, role: string | null = null) => ({ tagName, getAttribute: () => role });
+    const el = (tagName: string, role: string | null = null) => ({
+      tagName,
+      getAttribute: () => role,
+    });
     expect(isInteractiveTarget(el('INPUT'), 'a')).toBe(true);
     expect(isInteractiveTarget(el('TEXTAREA'), 'Escape')).toBe(true);
     expect(isInteractiveTarget({ tagName: 'DIV', isContentEditable: true }, 'f')).toBe(true);

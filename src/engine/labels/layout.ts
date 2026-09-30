@@ -73,7 +73,12 @@ function inside(b: LabelBox, width: number, height: number): boolean {
 /**
  * Place `boxes[0..count)` (reordered in place by descending priority). Returns the number visible.
  */
-export function layoutLabels(boxes: LabelBox[], count: number, width: number, height: number): number {
+export function layoutLabels(
+  boxes: LabelBox[],
+  count: number,
+  width: number,
+  height: number,
+): number {
   // Insertion sort by priority, descending (stable, small n).
   for (let i = 1; i < count; i++) {
     const it = boxes[i];

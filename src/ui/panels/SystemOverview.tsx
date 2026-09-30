@@ -1,7 +1,7 @@
 /** A star's system at a glance: the guidebook blurb's companion — planet list, zones and belts. */
 import { formatDistanceKm, formatNumber, NBSP } from '../../core/format';
-import { KM_PER_AU } from '../../core/units';
 import type { Planet, StarSystem } from '../../core/types';
+import { KM_PER_AU } from '../../core/units';
 import { Icon } from '../components/Icon';
 import { PlanetSwatch } from '../components/Swatches';
 import { flyTo } from '../lib/actions';
@@ -25,7 +25,9 @@ export function PlanetRow({ planet }: { planet: Planet }) {
         <span className="sd-row__main">
           <span className="sd-row__name">
             {planet.name}
-            {planet.rings && <Icon name="ring" size={13} aria-label="Ringed" className="sd-row__glyph" />}
+            {planet.rings && (
+              <Icon name="ring" size={13} aria-label="Ringed" className="sd-row__glyph" />
+            )}
             {planet.moons.length > 0 && (
               <span className="sd-row__glyph sd-mono" title={`${planet.moons.length} moons`}>
                 <Icon name="moon" size={12} />
@@ -76,7 +78,8 @@ export function SystemOverview({ system }: { system: StarSystem }) {
       )}
       {system.planets.length > 0 && (
         <p className="sd-footnote sd-mono">
-          Habitable zone {auRange(...system.habitableZoneKm)} · frost line {formatDistanceKm(system.frostLineKm)}
+          Habitable zone {auRange(...system.habitableZoneKm)} · frost line{' '}
+          {formatDistanceKm(system.frostLineKm)}
           {belts > 0 ? ` · ${belts} ${belts === 1 ? 'belt' : 'belts'}` : ''}
         </p>
       )}

@@ -39,7 +39,9 @@ export function galaxyOverview(): void {
 }
 
 export function focusIs(focus: FocusTarget | null, ref: SelectionRef | null): boolean {
-  return !!focus && !!ref && focus.kind !== 'galaxy' && focus.kind === ref.kind && focus.id === ref.id;
+  return (
+    !!focus && !!ref && focus.kind !== 'galaxy' && focus.kind === ref.kind && focus.id === ref.id
+  );
 }
 
 export type SurpriseKind = Extract<RandomStarKind, 'habitable' | 'ringed' | 'exotic'>;
@@ -51,7 +53,10 @@ const SURPRISE_COPY: Readonly<Record<SurpriseKind, string>> = {
 };
 
 /** "Surprise me": pick a deterministic-per-roll star of the requested flavour and go there. */
-export function surpriseMe(kind: SurpriseKind, roll: number = Math.floor(Math.random() * 2 ** 31)): SelectionRef {
+export function surpriseMe(
+  kind: SurpriseKind,
+  roll: number = Math.floor(Math.random() * 2 ** 31),
+): SelectionRef {
   const universe = currentUniverse();
   const starId = universe.randomStarId(kind, roll);
   const system = universe.getSystem(starId);

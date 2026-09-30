@@ -5,6 +5,8 @@
  *   ?seed=<n>          galaxy seed (default: the app's)
  *   ?near=<ly>         particle near-fade distance (default 2500, as the app)
  *   ?validate=1        compare the GPU map bake with the CPU model → window.__GALAXY_CHECK__
+ *   ?look=k:v,k:v      override numeric `GalaxyLook` fields (A/B screenshots without code edits)
+ *   ?probe=u,v;u,v     HDR volume radiance + distance at screen uvs → window.__GALAXY_PROBE__
  *
  * Harness parameters (?t=, ?quality=, ?ui=0, ?cam=/&target=, …) work as usual (dev/README.md).
  */
@@ -56,7 +58,7 @@ const at = (base: THREE.Vector3, dir: THREE.Vector3, d: number, up = 0): Vec3Lik
 const PRESETS: Record<ViewName, Preset> = {
   overview: { cam: spherical(110_000, 35, 0.9), target: [0, 0, 0], fov: 50 },
   faceon: { cam: [0, 125_000, 1], target: [0, 0, 0], fov: 50 },
-  edgeon: { cam: spherical(100_000, 0.9, 2.2), target: [0, 0, 0], fov: 50 },
+  edgeon: { cam: spherical(100_000, 0.2, 2.2), target: [0, 0, 0], fov: 50 },
   'above-home': { cam: at(home, toCore, -2500, 5000), target: at(home, toCore, 9000), fov: 60 },
   'inside-core': { cam: [home.x, home.y, home.z], target: at(home, toCore, 10), fov: 70 },
   'inside-plane': { cam: [home.x, home.y, home.z], target: at(home, along, 10), fov: 70 },
@@ -76,6 +78,12 @@ const h = createHarness({
 });
 
 const visual = new GalaxyVisual(model, h.quality);
+for (const pair of (url.get('look') ?? '').split(',')) {
+  const [key, value] = pair.split(':');
+  const look = visual.look as unknown as Record<string, unknown>;
+  if (key && value !== undefined && typeof look[key] === 'number') look[key] = Number(value);
+}
+if (url.has('look')) visual.rebuildParticles();
 h.scene.add(visual.object);
 
 const options = {
@@ -110,6 +118,8 @@ light
   .name('core knee (rebuild)')
   .onFinishChange(() => visual.rebuildParticles());
 light.add(look, 'mottling', 0, 1, 0.01);
+light.add(look, 'armMottling', 0, 1, 0.01).name('arm mottling');
+light.add(look, 'beading', 0, 4, 0.01);
 light.add(look, 'hiiGlow', 0, 1, 0.01).name('HII glow');
 light.add(look, 'particleGain', 0, 4, 0.01).name('particle gain');
 light.add(look, 'clusterGain', 0, 6, 0.01).name('cluster gain');
@@ -119,12 +129,12 @@ light.add(look, 'maxSigmaPx', 2, 64, 0.5).name('max σ (px)');
 const dust = gui.addFolder('Dust');
 dust.add(look, 'dustOpacity', 0, 6, 0.01).name('lane τ (face-on)');
 dust.add(look, 'dustThickness', 0.5, 3, 0.01).name('thickness × model');
-dust.add(look, 'dustDetail', 0, 2, 0.01).name('filaments');
+dust.add(look, 'dustDetail', 0, 4, 0.01).name('clumping');
 dust.add(look, 'nearDust', 0, 1.5, 0.01).name('near clouds');
 dust.add(look.reddening, '0', 0.3, 1.5, 0.01).name('κ red / green');
 dust.add(look.reddening, '2', 0.5, 2.5, 0.01).name('κ blue / green');
 const colour = gui.addFolder('Colour (rebuilds particles)');
-for (const key of ['bulgeK', 'diskK', 'thickK', 'youngK'] as const) {
+for (const key of ['bulgeK', 'diskK', 'thickK', 'youngK', 'innerYoungK'] as const) {
   colour.add(look, key, 2500, 30_000, 50).onFinishChange(() => visual.rebuildParticles());
 }
 colour.add(look, 'saturation', 0.5, 2, 0.01).onFinishChange(() => visual.rebuildParticles());

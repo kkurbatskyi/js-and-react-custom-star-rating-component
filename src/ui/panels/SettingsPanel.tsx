@@ -3,8 +3,8 @@
  * and the galaxy seed (a whole new galaxy; ratings and bookmarks are kept per galaxy).
  */
 import { type CSSProperties, type ReactNode, useId, useState } from 'react';
-import { useStore } from '../../state/store';
 import type { QualitySetting } from '../../state/contracts';
+import { useStore } from '../../state/store';
 import { DEFAULT_GALAXY_SEED, getUniverse } from '../../universe';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
@@ -38,7 +38,15 @@ function Switch({
         <span className="sd-field__label">{label}</span>
         {hint && <span className="sd-field__hint">{hint}</span>}
       </span>
-      <input id={id} className="sd-switch" type="checkbox" role="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <input
+        id={id}
+        className="sd-switch"
+        type="checkbox"
+        role="switch"
+        aria-checked={checked}
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
     </label>
   );
 }
@@ -127,33 +135,35 @@ function SettingsBody() {
             Settings
           </h2>
         </div>
-        <button type="button" className="sd-iconbtn" aria-label="Close settings" onClick={() => closePanels()}>
+        <button
+          type="button"
+          className="sd-iconbtn"
+          aria-label="Close settings"
+          onClick={() => closePanels()}
+        >
           <Icon name="close" size={18} />
         </button>
       </header>
 
       <div className="sd-dialog__body">
         <Section title="Display">
-          <div className="sd-field sd-field--stack">
-            <span className="sd-field__label" id="sd-quality-label">
-              Quality
-            </span>
-            <div className="sd-seg" role="radiogroup" aria-labelledby="sd-quality-label">
+          <fieldset className="sd-field sd-field--stack sd-fieldset">
+            <legend className="sd-field__label">Quality</legend>
+            <div className="sd-seg">
               {QUALITIES.map((q) => (
-                <button
-                  key={q.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={settings.quality === q.value}
-                  title={q.hint}
-                  className="sd-seg__item"
-                  onClick={() => update({ quality: q.value })}
-                >
-                  {q.label}
-                </button>
+                <label key={q.value} className="sd-seg__item" title={q.hint}>
+                  <input
+                    type="radio"
+                    name="sd-quality"
+                    value={q.value}
+                    checked={settings.quality === q.value}
+                    onChange={() => update({ quality: q.value })}
+                  />
+                  <span>{q.label}</span>
+                </label>
               ))}
             </div>
-          </div>
+          </fieldset>
           <Range
             label="Bloom"
             value={settings.bloom}
@@ -163,9 +173,24 @@ function SettingsBody() {
             format={(v) => v.toFixed(2)}
             onChange={(bloom) => update({ bloom })}
           />
-          <Switch label="Labels" hint="Names beside stars and worlds" checked={settings.labels} onChange={(labels) => update({ labels })} />
-          <Switch label="Orbits" hint="Draw orbit lines in systems" checked={settings.orbits} onChange={(orbits) => update({ orbits })} />
-          <Switch label="Frame rate" hint="Show an FPS readout" checked={settings.showFps} onChange={(showFps) => update({ showFps })} />
+          <Switch
+            label="Labels"
+            hint="Names beside stars and worlds"
+            checked={settings.labels}
+            onChange={(labels) => update({ labels })}
+          />
+          <Switch
+            label="Orbits"
+            hint="Draw orbit lines in systems"
+            checked={settings.orbits}
+            onChange={(orbits) => update({ orbits })}
+          />
+          <Switch
+            label="Frame rate"
+            hint="Show an FPS readout"
+            checked={settings.showFps}
+            onChange={(showFps) => update({ showFps })}
+          />
         </Section>
 
         <Section title="Motion">
@@ -184,7 +209,12 @@ function SettingsBody() {
         </Section>
 
         <Section title="Sound">
-          <Switch label="Ambient sound" hint="Generated live, no audio files" checked={settings.audio} onChange={(audio) => update({ audio })} />
+          <Switch
+            label="Ambient sound"
+            hint="Generated live, no audio files"
+            checked={settings.audio}
+            onChange={(audio) => update({ audio })}
+          />
           <Range
             label="Volume"
             value={settings.volume}
@@ -208,8 +238,8 @@ function SettingsBody() {
         <Section title="Galaxy">
           <p className="sd-dialog__note">
             You are in <strong>{universe.galaxy.params.name}</strong>, seed{' '}
-            <span className="sd-mono">{settings.galaxySeed}</span>. Every seed is a different galaxy; ratings and
-            bookmarks belong to the galaxy they were made in.
+            <span className="sd-mono">{settings.galaxySeed}</span>. Every seed is a different
+            galaxy; ratings and bookmarks belong to the galaxy they were made in.
           </p>
           <form
             className="sd-seedform"
@@ -231,12 +261,20 @@ function SettingsBody() {
               aria-invalid={!seedValid}
               onChange={(e) => setSeedText(e.target.value)}
             />
-            <button type="submit" className="sd-btn" disabled={!seedValid || Number(seedText) === settings.galaxySeed}>
+            <button
+              type="submit"
+              className="sd-btn"
+              disabled={!seedValid || Number(seedText) === settings.galaxySeed}
+            >
               Chart it
             </button>
           </form>
           <div className="sd-dialog__row">
-            <button type="button" className="sd-btn sd-btn--primary" onClick={() => chart(Math.floor(Math.random() * 2 ** 32))}>
+            <button
+              type="button"
+              className="sd-btn sd-btn--primary"
+              onClick={() => chart(Math.floor(Math.random() * 2 ** 32))}
+            >
               <Icon name="sparkle" size={15} />
               New galaxy
             </button>

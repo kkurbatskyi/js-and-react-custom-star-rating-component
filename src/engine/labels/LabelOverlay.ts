@@ -106,6 +106,11 @@ export class LabelOverlay {
     }
   }
 
+  /** Drop every label at once (after a camera cut: stale labels must not fade out in place). */
+  clear(): void {
+    for (const e of [...this.entries.values()]) this.release(e);
+  }
+
   setVisible(on: boolean): void {
     if (on === this.visible) return;
     this.visible = on;
@@ -113,7 +118,13 @@ export class LabelOverlay {
   }
 
   /** Show this frame's labels (`specs` may be reordered). */
-  update(specs: readonly LabelSpec[], count: number, width: number, height: number, dtSec: number): void {
+  update(
+    specs: readonly LabelSpec[],
+    count: number,
+    width: number,
+    height: number,
+    dtSec: number,
+  ): void {
     for (const e of this.entries.values()) e.seen = false;
     const sorted = this.sorted;
     sorted.length = 0;
@@ -132,7 +143,8 @@ export class LabelOverlay {
     }
     layoutLabels(this.boxes, this.boxes.length, width, height);
 
-    const k = 1 - Math.exp(-FADE_LAMBDA * Math.max(dtSec, 1 / 60));
+    // dt = 0 (frozen clock, deterministic screenshots): snap instead of fading.
+    const k = dtSec > 0 ? 1 - Math.exp(-FADE_LAMBDA * dtSec) : 1;
     for (const e of this.entries.values()) {
       e.target = e.seen && e.box.visible ? 1 : 0;
       if (e.seen && e.box.visible) this.position(e);
@@ -191,7 +203,9 @@ export class LabelOverlay {
     const b = e.box;
     b.x = spec.x;
     b.y = spec.y;
-    b.w = this.measure(text, NAME_FONT, NAME_TRACKING) + (sub ? SUB_GAP + this.measure(sub, SUB_FONT, 0) : 0);
+    b.w =
+      this.measure(text, NAME_FONT, NAME_TRACKING) +
+      (sub ? SUB_GAP + this.measure(sub, SUB_FONT, 0) : 0);
     b.h = LINE_H;
     b.priority = spec.priority;
     b.gap = marker === 'ring' ? 11 : marker === 'dot' ? 7 : 8;

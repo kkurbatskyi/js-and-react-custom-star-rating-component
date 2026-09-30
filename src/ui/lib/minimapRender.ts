@@ -105,7 +105,10 @@ export function renderGalaxyMap(
   for (let n = 0; n < 2600; n++) {
     galaxy.samplePosition(rng, p);
     const [px, py] = worldToMap(p[0], p[2], pixels, extent);
-    const [r, g, b] = tint(galaxy.youngFraction(p[0], 0, p[2]), galaxy.bulgeFraction(p[0], 0, p[2]));
+    const [r, g, b] = tint(
+      galaxy.youngFraction(p[0], 0, p[2]),
+      galaxy.bulgeFraction(p[0], 0, p[2]),
+    );
     ctx.fillStyle = `rgb(${r | 0} ${g | 0} ${b | 0} / ${(0.25 + rng.next() * 0.6).toFixed(2)})`;
     ctx.fillRect(px, py, dot, dot);
   }

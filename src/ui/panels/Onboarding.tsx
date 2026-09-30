@@ -29,13 +29,13 @@ export function Onboarding() {
   const tips: { icon: IconName; title: string; body: string }[] = [
     {
       icon: 'orbit',
-      title: touch ? 'Drag to orbit' : 'Drag to orbit',
+      title: 'Drag to orbit',
       body: touch ? 'Two fingers pan across the galaxy.' : 'Right-drag pans across the galaxy.',
     },
     {
       icon: 'pinch',
       title: touch ? 'Pinch to zoom' : 'Scroll to zoom',
-      body: 'Twenty orders of magnitude, from the whole spiral to a planet’s cloud tops.',
+      body: 'From the whole spiral to a planet’s cloud tops.',
     },
     {
       icon: 'pointer',
@@ -44,7 +44,12 @@ export function Onboarding() {
     },
   ];
   return (
-    <aside className="sd-note sd-panel sd-ticked" role="dialog" aria-labelledby="sd-note-title" aria-modal="false">
+    <aside
+      className="sd-note sd-panel sd-ticked"
+      role="dialog"
+      aria-labelledby="sd-note-title"
+      aria-modal="false"
+    >
       <header className="sd-note__head">
         <div>
           <p className="sd-eyebrow">Field notes</p>
@@ -52,7 +57,12 @@ export function Onboarding() {
             Three things to know
           </h2>
         </div>
-        <button type="button" className="sd-iconbtn" aria-label="Dismiss field notes" onClick={dismiss}>
+        <button
+          type="button"
+          className="sd-iconbtn"
+          aria-label="Dismiss field notes"
+          onClick={dismiss}
+        >
           <Icon name="close" size={17} />
         </button>
       </header>
@@ -70,10 +80,15 @@ export function Onboarding() {
         ))}
       </ul>
       <p className="sd-note__wink">
-        This used to be a star-rating component. It now rates actual stars: open any star or planet and give it
-        some.
+        This used to be a star-rating component. It now rates actual stars: open any star or planet
+        and give it some.
       </p>
-      <button type="button" className="sd-btn sd-btn--primary sd-note__go" onClick={dismiss} data-autofocus>
+      <button
+        type="button"
+        className="sd-btn sd-btn--primary sd-note__go"
+        onClick={dismiss}
+        data-autofocus
+      >
         Begin exploring
       </button>
     </aside>

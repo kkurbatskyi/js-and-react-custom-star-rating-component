@@ -43,12 +43,20 @@ export function Minimap() {
     const el = canvas.current;
     if (!el) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const handle = window.setTimeout(() => renderGalaxyMap(el, universe.galaxy, Math.round(SIZE * dpr)), 30);
+    const handle = window.setTimeout(
+      () => renderGalaxyMap(el, universe.galaxy, Math.round(SIZE * dpr)),
+      30,
+    );
     return () => window.clearTimeout(handle);
   }, [universe]);
 
   const cam = worldToMap(cameraLy[0], cameraLy[2], SIZE, extent);
-  const home = worldToMap(universe.galaxy.params.homeLy[0], universe.galaxy.params.homeLy[2], SIZE, extent);
+  const home = worldToMap(
+    universe.galaxy.params.homeLy[0],
+    universe.galaxy.params.homeLy[2],
+    SIZE,
+    extent,
+  );
   const focusPt = useMemo(() => pointOf(focus, universe), [focus, universe]);
   const destPt = useMemo(() => pointOf(flightTarget, universe), [flightTarget, universe]);
   const focusXY = focusPt ? worldToMap(focusPt[0], focusPt[2], SIZE, extent) : null;
@@ -61,9 +69,15 @@ export function Minimap() {
 
   const worldAt = (e: PointerEvent<HTMLElement>): [number, number] => {
     const r = e.currentTarget.getBoundingClientRect();
-    return mapToWorld(((e.clientX - r.left) / r.width) * SIZE, ((e.clientY - r.top) / r.height) * SIZE, SIZE, extent);
+    return mapToWorld(
+      ((e.clientX - r.left) / r.width) * SIZE,
+      ((e.clientY - r.top) / r.height) * SIZE,
+      SIZE,
+      extent,
+    );
   };
-  const inDisk = (x: number, z: number) => Math.hypot(x, z) <= universe.galaxy.params.radiusLy * 1.08;
+  const inDisk = (x: number, z: number) =>
+    Math.hypot(x, z) <= universe.galaxy.params.radiusLy * 1.08;
 
   const onKey = (e: KeyboardEvent<HTMLElement>) => {
     const step = extent * 0.08;
@@ -95,11 +109,10 @@ export function Minimap() {
 
   return (
     <div className="sd-minimap sd-panel sd-ticked">
-      <div
+      <button
+        type="button"
         className="sd-minimap__map"
-        role="application"
         aria-label="Galaxy map. Click to fly to a point, or use the arrow keys and Enter."
-        tabIndex={0}
         onPointerMove={(e) => setPointer(worldAt(e))}
         onPointerLeave={() => setPointer(null)}
         onPointerDown={(e) => {
@@ -120,23 +133,27 @@ export function Minimap() {
               className="sd-minimap__ring"
             />
           ))}
-          <path
-            className="sd-minimap__axis"
-            d={`M${SIZE / 2} 0V${SIZE}M0 ${SIZE / 2}H${SIZE}`}
-          />
+          <path className="sd-minimap__axis" d={`M${SIZE / 2} 0V${SIZE}M0 ${SIZE / 2}H${SIZE}`} />
           {/* home: hollow diamond */}
           <path
             className="sd-minimap__home"
             d={`M${home[0]} ${home[1] - 3.6}L${home[0] + 3.6} ${home[1]}L${home[0]} ${home[1] + 3.6}L${home[0] - 3.6} ${home[1]}Z`}
           />
-          {focusXY && <circle className="sd-minimap__focus" cx={focusXY[0]} cy={focusXY[1]} r="5" />}
+          {focusXY && (
+            <circle className="sd-minimap__focus" cx={focusXY[0]} cy={focusXY[1]} r="5" />
+          )}
           {destXY && (
             <>
-              <path className="sd-minimap__course" d={`M${camXY[0]} ${camXY[1]}L${destXY[0]} ${destXY[1]}`} />
+              <path
+                className="sd-minimap__course"
+                d={`M${camXY[0]} ${camXY[1]}L${destXY[0]} ${destXY[1]}`}
+              />
               <circle className="sd-minimap__dest" cx={destXY[0]} cy={destXY[1]} r="3" />
             </>
           )}
-          {cursorXY && <circle className="sd-minimap__cursor" cx={cursorXY[0]} cy={cursorXY[1]} r="6" />}
+          {cursorXY && (
+            <circle className="sd-minimap__cursor" cx={cursorXY[0]} cy={cursorXY[1]} r="6" />
+          )}
           {/* you are here: a reticle with a soft halo */}
           <circle className="sd-minimap__halo" cx={camXY[0]} cy={camXY[1]} r="7" />
           <path
@@ -145,7 +162,7 @@ export function Minimap() {
           />
           <circle className="sd-minimap__dot" cx={camXY[0]} cy={camXY[1]} r="1.3" />
         </svg>
-      </div>
+      </button>
       <div className="sd-minimap__caption sd-mono">
         {shownWorld ? (
           <span>

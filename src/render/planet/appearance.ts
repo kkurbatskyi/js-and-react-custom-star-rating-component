@@ -49,7 +49,9 @@ export function probit(p: number): number {
     -7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838, -2.549732539343734,
     4.374664141464968, 2.938163982698783,
   ] as const;
-  const d = [7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996, 3.754408661907416] as const;
+  const d = [
+    7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996, 3.754408661907416,
+  ] as const;
   const pLow = 0.02425;
   if (q < pLow) {
     const r = Math.sqrt(-2 * Math.log(q));
@@ -78,7 +80,7 @@ export function probit(p: number): number {
  * `terrain.glsl.ts`). Measured on the GPU with `dev/planet.html?debug=hist`; the field is close to
  * Gaussian, so `sea = σ · Φ⁻¹(oceanCoverage)` puts the requested fraction of the globe under water.
  */
-export const CONTINENT_SIGMA = 0.265;
+export const CONTINENT_SIGMA = 0.22;
 /** "No liquid" sentinel for the sea level (far below any terrain value). */
 export const NO_SEA = -9;
 
@@ -118,7 +120,8 @@ export function vegetationColorForStar(temperatureK: number): RGB {
   for (let i = 1; i < t.length; i++) {
     const hi = t[i];
     const lo = t[i - 1];
-    if (hi && lo && temperatureK <= hi[0]) return mix(lo[1], hi[1], (temperatureK - lo[0]) / (hi[0] - lo[0]));
+    if (hi && lo && temperatureK <= hi[0])
+      return mix(lo[1], hi[1], (temperatureK - lo[0]) / (hi[0] - lo[0]));
   }
   return last[1];
 }
@@ -202,25 +205,33 @@ export function annualInsolation(latRad: number, obliquityRad: number): number {
 function dailyInsolation(lat: number, dec: number): number {
   const x = -Math.tan(lat) * Math.tan(dec);
   const h0 = x >= 1 ? 0 : x <= -1 ? Math.PI : Math.acos(x);
-  return (h0 * Math.sin(lat) * Math.sin(dec) + Math.cos(lat) * Math.cos(dec) * Math.sin(h0)) / Math.PI;
+  return (
+    (h0 * Math.sin(lat) * Math.sin(dec) + Math.cos(lat) * Math.cos(dec) * Math.sin(h0)) / Math.PI
+  );
 }
 
 /** Normalised (global mean = 1) insolation table over |latitude| = i/(n−1)·90°, or substellar angle for locked worlds. */
-export function insolationProfile(obliquityRad: number, locked: boolean, n = CLIMATE_LUT_SIZE): number[] {
+export function insolationProfile(
+  obliquityRad: number,
+  locked: boolean,
+  n = CLIMATE_LUT_SIZE,
+): number[] {
   const raw: number[] = [];
   for (let i = 0; i < n; i++) {
     const a = (i / (n - 1)) * (Math.PI / 2);
     // Locked: coordinate is the angle from the substellar point (0 → π), half-range here.
-    raw.push(locked ? Math.max(Math.cos(i === 0 ? 0 : (i / (n - 1)) * Math.PI), 0) : annualInsolation(a, obliquityRad));
+    raw.push(
+      locked
+        ? Math.max(Math.cos(i === 0 ? 0 : (i / (n - 1)) * Math.PI), 0)
+        : annualInsolation(a, obliquityRad),
+    );
   }
   // Area-weighted mean over the sphere. Latitude i spans a band of weight cos(φ) (both hemispheres
   // are equal); the locked profile is a function of the polar angle from the substellar axis: weight sin θ.
   let num = 0;
   let den = 0;
   for (let i = 0; i < n; i++) {
-    const w = locked
-      ? Math.sin((i / (n - 1)) * Math.PI)
-      : Math.cos((i / (n - 1)) * (Math.PI / 2));
+    const w = locked ? Math.sin((i / (n - 1)) * Math.PI) : Math.cos((i / (n - 1)) * (Math.PI / 2));
     num += (raw[i] ?? 0) * w;
     den += w;
   }
@@ -271,7 +282,11 @@ function weightedMean(values: readonly number[], locked: boolean): number {
  * Temperature below which the surface is ice so that the ice-covered area fraction equals
  * `coverage`: the coverage-quantile of the area-weighted zonal temperature distribution.
  */
-export function iceThresholdK(profile: readonly number[], locked: boolean, coverage: number): number {
+export function iceThresholdK(
+  profile: readonly number[],
+  locked: boolean,
+  coverage: number,
+): number {
   if (coverage <= 0) return -1;
   if (coverage >= 1) return 1e6;
   const n = profile.length;
@@ -303,7 +318,11 @@ export const STYLE_ID: Readonly<Record<RockyStyle, number>> = {
 };
 
 export type LiquidKind = 'water' | 'hydrocarbon' | 'magma';
-export const LIQUID_ID: Readonly<Record<LiquidKind, number>> = { water: 0, hydrocarbon: 1, magma: 2 };
+export const LIQUID_ID: Readonly<Record<LiquidKind, number>> = {
+  water: 0,
+  hydrocarbon: 1,
+  magma: 2,
+};
 export type EmissiveKind = 'none' | 'city' | 'lava';
 export const EMISSIVE_ID: Readonly<Record<EmissiveKind, number>> = { none: 0, city: 1, lava: 2 };
 
@@ -455,12 +474,12 @@ function styleFor(body: BodyBase): RockyStyle {
   }
 }
 
-function terrainFor(body: BodyBase, style: RockyStyle, locked: boolean, rng: Rng): TerrainParams {
+function terrainFor(body: BodyBase, locked: boolean, rng: Rng): TerrainParams {
   const cr = clamp01(body.craterDensity);
   const vol = clamp01(body.volcanism);
   const base: TerrainParams = {
     contScale: rng.range(1.15, 1.75),
-    warp: rng.range(0.35, 0.65),
+    warp: rng.range(0.25, 0.5),
     sea: seaLevelForCoverage(body.oceanCoverage),
     contAmp: 1,
     mountains: 0.2,
@@ -477,9 +496,23 @@ function terrainFor(body: BodyBase, style: RockyStyle, locked: boolean, rng: Rng
   };
   switch (body.type) {
     case 'terran':
-      return { ...base, mountains: 0.95, hills: 0.7, craters: cr * 0.25, volcanoes: vol * 0.3, relief: 0.011 };
+      return {
+        ...base,
+        mountains: 0.95,
+        hills: 0.7,
+        craters: cr * 0.25,
+        volcanoes: vol * 0.3,
+        relief: 0.007,
+      };
     case 'ocean':
-      return { ...base, contScale: rng.range(1.5, 2.2), mountains: 0.6, hills: 0.5, volcanoes: 0.35, relief: 0.008 };
+      return {
+        ...base,
+        contScale: rng.range(1.5, 2.2),
+        mountains: 0.6,
+        hills: 0.5,
+        volcanoes: 0.35,
+        relief: 0.008,
+      };
     case 'desert':
       return {
         ...base,
@@ -493,7 +526,15 @@ function terrainFor(body: BodyBase, style: RockyStyle, locked: boolean, rng: Rng
         relief: 0.02,
       };
     case 'hothouse':
-      return { ...base, contAmp: 0.8, mountains: 0.7, hills: 0.5, craters: 0.05, volcanoes: 0.4 + vol, relief: 0.02 };
+      return {
+        ...base,
+        contAmp: 0.8,
+        mountains: 0.7,
+        hills: 0.5,
+        craters: 0.05,
+        volcanoes: 0.4 + vol,
+        relief: 0.02,
+      };
     case 'barren':
       return {
         ...base,
@@ -506,7 +547,15 @@ function terrainFor(body: BodyBase, style: RockyStyle, locked: boolean, rng: Rng
         relief: 0.024,
       };
     case 'dwarf':
-      return { ...base, contAmp: 0.4, mountains: 0.25, hills: 0.35, craters: cr * 0.9, craterSize: 0.3, relief: 0.03 };
+      return {
+        ...base,
+        contAmp: 0.4,
+        mountains: 0.25,
+        hills: 0.35,
+        craters: cr * 0.9,
+        craterSize: 0.3,
+        relief: 0.03,
+      };
     case 'ice':
       return {
         ...base,
@@ -541,8 +590,9 @@ function deriveRockyLook(body: BodyBase, system: StarSystem | null): RockyLook {
   const a = body.appearance;
   const style = styleFor(body);
   const isPlanet = system ? system.planets.some((p) => p.id === body.id) : true;
-  const locked = body.tidallyLocked && isPlanet && (body.oceanCoverage > 0.02 || body.type === 'lava');
-  const terrain = terrainFor(body, style, locked, rng.fork('terrain'));
+  const locked =
+    body.tidallyLocked && isPlanet && (body.oceanCoverage > 0.02 || body.type === 'lava');
+  const terrain = terrainFor(body, locked, rng.fork('terrain'));
 
   // ── colours ────────────────────────────────────────────────────────────
   const sc = a.surfaceColors.length > 0 ? a.surfaceColors : [a.swatch];
@@ -591,11 +641,19 @@ function deriveRockyLook(body: BodyBase, system: StarSystem | null): RockyLook {
   let ocean: OceanLook | null = null;
   if (a.oceanColor && body.oceanCoverage > 0.001) {
     const liquid: LiquidKind =
-      body.type === 'lava' || body.surfaceTempK > 800 ? 'magma' : body.surfaceTempK < 200 ? 'hydrocarbon' : 'water';
+      body.type === 'lava' || body.surfaceTempK > 800
+        ? 'magma'
+        : body.surfaceTempK < 200
+          ? 'hydrocarbon'
+          : 'water';
     const deep = a.oceanColor;
     const shallow: RGB =
       liquid === 'water'
-        ? [Math.min(0.22, deep[0] * 1.7 + 0.018), Math.min(0.45, deep[1] * 2.6 + 0.06), Math.min(0.5, deep[2] * 1.5 + 0.05)]
+        ? [
+            Math.min(0.22, deep[0] * 1.7 + 0.018),
+            Math.min(0.45, deep[1] * 2.6 + 0.06),
+            Math.min(0.5, deep[2] * 1.5 + 0.05),
+          ]
         : liquid === 'hydrocarbon'
           ? scale(deep, 1.8)
           : [Math.min(1, deep[0] * 1.4), Math.min(1, deep[1] * 2.2), Math.min(1, deep[2] * 2)];
@@ -604,7 +662,14 @@ function deriveRockyLook(body: BodyBase, system: StarSystem | null): RockyLook {
       deep,
       shallow,
       liquid,
-      roughness: liquid === 'hydrocarbon' ? 0.045 : liquid === 'magma' ? 0.12 : thin ? 0.08 : rng.range(0.11, 0.17),
+      roughness:
+        liquid === 'hydrocarbon'
+          ? 0.045
+          : liquid === 'magma'
+            ? 0.12
+            : thin
+              ? 0.08
+              : rng.range(0.11, 0.17),
     };
   }
 
@@ -637,7 +702,7 @@ function deriveRockyLook(body: BodyBase, system: StarSystem | null): RockyLook {
       lut,
       locked,
       iceTempK,
-      lapseK: body.type === 'terran' || body.type === 'ocean' ? 45 : 25,
+      lapseK: body.type === 'terran' || body.type === 'ocean' ? 14 : 20,
     },
     ocean,
     emissive,
@@ -658,7 +723,10 @@ function deriveGiantLook(body: BodyBase): GiantLook {
   const sorted = [...(a.surfaceColors.length > 0 ? a.surfaceColors : [a.swatch])].sort(
     (x, y) => luminance(x) - luminance(y),
   );
-  const colors = sorted.length >= 2 ? sorted : [scale(sorted[0] ?? a.swatch, 0.8), scale(sorted[0] ?? a.swatch, 1.15)];
+  const colors =
+    sorted.length >= 2
+      ? sorted
+      : [scale(sorted[0] ?? a.swatch, 0.8), scale(sorted[0] ?? a.swatch, 1.15)];
 
   // Banding character by world class (Jupiter/Saturn vs Neptune/Uranus vs hot Jupiters).
   let contrast = 0.75;
@@ -742,7 +810,17 @@ export const BAKE_SIZE: Readonly<Record<Quality, number>> = {
 };
 
 /** Runtime detail-noise octaves near the surface, by quality. */
-export const DETAIL_OCTAVES: Readonly<Record<Quality, number>> = { low: 2, medium: 3, high: 4, ultra: 5 };
+export const DETAIL_OCTAVES: Readonly<Record<Quality, number>> = {
+  low: 2,
+  medium: 3,
+  high: 4,
+  ultra: 5,
+};
 
 /** Sphere tessellation (segments around the equator) for the full surface mesh. */
-export const SURFACE_SEGMENTS: Readonly<Record<Quality, number>> = { low: 96, medium: 128, high: 192, ultra: 256 };
+export const SURFACE_SEGMENTS: Readonly<Record<Quality, number>> = {
+  low: 96,
+  medium: 128,
+  high: 192,
+  ultra: 256,
+};

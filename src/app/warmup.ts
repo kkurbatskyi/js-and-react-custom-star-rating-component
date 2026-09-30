@@ -12,7 +12,11 @@ import type { LayerContext } from './layers/context';
 
 const WARMUP_TIMEOUT_MS = 5000;
 
-export async function warmUpShaders(engine: Engine, ctx: LayerContext, universe: Universe): Promise<void> {
+export async function warmUpShaders(
+  engine: Engine,
+  ctx: LayerContext,
+  universe: Universe,
+): Promise<void> {
   const system = universe.getSystem(universe.homeStarId());
   if (!system) return;
   const scene = new Scene();

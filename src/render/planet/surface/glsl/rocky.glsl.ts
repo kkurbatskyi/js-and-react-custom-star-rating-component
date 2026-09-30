@@ -61,7 +61,7 @@ out vec4 fragColor;
 /** Blackbody-ish lava ramp: deep red crust glow -> orange -> yellow-white, e in 0..1. */
 vec3 lavaColor(float e) {
   vec3 c = mix(vec3(0.55, 0.04, 0.01), vec3(1.0, 0.32, 0.04), smoothstep(0.15, 0.6, e));
-  return mix(c, vec3(1.0, 0.72, 0.28), smoothstep(0.65, 1.0, e));
+  return mix(c, vec3(1.0, 0.6, 0.2), smoothstep(0.7, 1.0, e));
 }
 
 /**
@@ -69,7 +69,7 @@ vec3 lavaColor(float e) {
  * uRelief). The sun ray rises above the sphere as phi tan(e) + phi^2/2 (curvature helps); the smoothstep
  * width models the penumbra (sun angular size) plus the height quantisation.
  */
-float horizonShadow(vec3 p, vec3 L, float hp) {
+float horizonShadow(vec3 p, vec3 L, float lodPx) {
   float mu = dot(p, L);
   if (mu > 0.55) return 1.0;
   if (mu < -0.3) return 0.0;
@@ -78,13 +78,16 @@ float horizonShadow(vec3 p, vec3 L, float hp) {
   if (tl < 1e-4) return 1.0;
   t /= tl;
   float tanE = mu / sqrt(max(1.0 - mu * mu, 1e-4));
+  // Explicit LODs: the loop sits in non-uniform control flow, and far samples only need coarse heights.
+  float hp = (textureLod(uReliefTex, p, lodPx).a * 2.0 - 0.75) * uRelief;
   float shadow = 1.0;
   float phi = 0.0025;
   for (int i = 0; i < 11; i++) {
     vec3 q = p * cos(phi) + t * sin(phi);
-    float ht = (texture(uReliefTex, q).a * 2.0 - 0.75) * uRelief;
+    float lod = max(lodPx, log2(phi / uBakeTexel) - 1.0);
+    float ht = (textureLod(uReliefTex, q, lod).a * 2.0 - 0.75) * uRelief;
     float ray = hp + phi * tanE + 0.5 * phi * phi;
-    float soft = phi * uSunAng * 2.0 + uRelief * 0.012 + 1e-4;
+    float soft = phi * (uSunAng * 2.0 + 0.012) + uRelief * 0.02 + 2e-4;
     shadow = min(shadow, smoothstep(-soft, soft, ray - ht));
     phi *= 1.55;
   }
@@ -116,7 +119,7 @@ void main() {
     for (int k = 0; k < 5; k++) {
       if (float(k) >= uDetailOctaves) break;
       float wl = 4.0 * uBakeTexel * exp2(-float(k));
-      float fade = smoothstep(1.5 * px, 4.0 * px, wl);
+      float fade = smoothstep(2.5 * px, 8.0 * px, wl);
       if (fade <= 0.001) break;
       vec4 nz = snoiseGrad(p / wl + uSeed * (1.0 + 0.37 * float(k)));
       float amp = fade * exp2(-0.35 * float(k));
@@ -144,7 +147,7 @@ void main() {
   vec3 sunT = vec3(1.0);
   if (uAmbient > 0.0) sunT = exp(-uSunTau * airmass(mu0));
   float shadow = 1.0;
-  if (mu0 > -0.3 && ocean < 0.99) shadow = horizonShadow(p, L, h * uRelief);
+  if (mu0 > -0.3 && ocean < 0.99) shadow = horizonShadow(p, L, max(0.0, log2(px / uBakeTexel)));
   float eclipse = 1.0;
   for (int i = 0; i < 4; i++) {
     if (i >= uOccCount) break;
@@ -180,13 +183,13 @@ void main() {
       windRough = uOceanRough * (0.65 + 0.7 * wind);
       vec3 ws = vec3(0.0);
       for (int k = 0; k < 3; k++) {
-        float wl = 10.0 * uBakeTexel * exp2(-float(k) * 1.3);
-        float fade = smoothstep(1.5 * px, 5.0 * px, wl);
+        float wl = 6.0 * uBakeTexel * exp2(-float(k) * 1.3);
+        float fade = smoothstep(6.0 * px, 16.0 * px, wl);
         if (fade <= 0.001) break;
         vec4 nz = snoiseGrad(p / wl + uSeed * 1.9 + vec3(uTime * 0.01 * exp2(float(k)), 0.0, 0.0));
         ws += fade * nz.yzw * exp2(-0.5 * float(k));
       }
-      ws *= 0.05 + 0.09 * wind;
+      ws *= 0.02 + 0.04 * wind;
       ws -= dot(ws, p) * p;
       nW = normalize(nGeo - ws);
 
@@ -201,7 +204,7 @@ void main() {
       float ndlW = saturate(dot(nW, L));
       float ndvW = max(dot(nW, V), 0.02);
       float ndh = saturate(dot(nW, H));
-      float a = max(windRough, 0.03);
+      float a = max(windRough, 0.06);
       float Fs = fresnelSchlick(f0, saturate(dot(H, V)));
       float spec = min(ggxD(ndh, a) * smithV(ndlW, ndvW, a) * Fs * ndlW, 40.0);
       float Fv = fresnelSchlick(f0, ndvW);
@@ -216,8 +219,7 @@ void main() {
   // ---- emissives: lava glow and city lights (only where it is dark)
   if (uEmissiveKind == 2) {
     float e = emis;
-    if (uOceanMode > 2.5) e = max(e, ocean * 0.9);
-    col += lavaColor(e) * (3.4 * uEmissive * e * e);
+    col += lavaColor(e) * (2.6 * uEmissive * pow(e, 2.2));
   } else if (uEmissiveKind == 1) {
     float night = 1.0 - smoothstep(-0.06, 0.05, mu0);
     col += vec3(1.0, 0.74, 0.42) * (2.6 * uEmissive * emis * night);
@@ -226,6 +228,8 @@ void main() {
   if (uDebug == 1) col = albedo;
   else if (uDebug == 2) col = n * 0.5 + 0.5;
   else if (uDebug == 3) col = vec3(h * 0.5 + 0.375);
+  else if (uDebug == 4) col = vec3(shadow);
+  else if (uDebug == 5) col = vec3(dif);
   fragColor = vec4(col * uIntensity, 1.0);
 }
 `;

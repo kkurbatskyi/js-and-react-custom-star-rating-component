@@ -22,7 +22,7 @@
 .sd-layout {
   --sd-right-inset: 0px;
 }
-.sd-layout[data-panel='open'] {
+.sd-layout[data-panel="open"] {
   --sd-right-inset: calc(var(--sd-panel-w) + var(--sd-inset));
 }
 
@@ -58,7 +58,7 @@
   .sd-time__now-text {
     display: none;
   }
-  .sd-layout[data-panel='open'] .sd-slot--scale {
+  .sd-layout[data-panel="open"] .sd-slot--scale {
     display: none;
   }
 }
@@ -83,14 +83,18 @@
 
 /* ── phone ─────────────────────────────────────────────────────────────────────────────── */
 @container sd (max-width: 720px) {
+  .sd-toasts {
+    left: 50%;
+    width: min(420px, calc(100% - 2 * var(--sd-inset)));
+  }
   .sd-layout {
     --sd-sheet-offset: 0px;
   }
-  .sd-layout[data-sheet='peek'] {
+  .sd-layout[data-sheet="peek"] {
     --sd-sheet-offset: calc(176px + var(--sd-safe-b));
   }
-  .sd-layout[data-sheet='half'],
-  .sd-layout[data-sheet='full'] {
+  .sd-layout[data-sheet="half"],
+  .sd-layout[data-sheet="full"] {
     --sd-sheet-offset: 0px;
   }
 
@@ -110,12 +114,10 @@
     right: calc(var(--sd-inset) + var(--sd-safe-r));
     transform: none;
   }
-  .sd-slot--coords,
-  .sd-slot--fps {
+  .sd-slot--coords {
     display: none;
   }
   .sd-slot--fps {
-    display: block;
     top: auto;
     left: calc(var(--sd-inset) + var(--sd-safe-l));
     bottom: calc(var(--sd-sheet-offset) + var(--sd-inset) + var(--sd-safe-b) + 70px);
@@ -132,13 +134,33 @@
   .sd-slot--time .sd-time {
     width: 100%;
     justify-content: space-between;
+    flex-wrap: wrap;
   }
-  .sd-layout[data-sheet='half'] .sd-slot--time,
-  .sd-layout[data-sheet='half'] .sd-slot--scale,
-  .sd-layout[data-sheet='full'] .sd-slot--time,
-  .sd-layout[data-sheet='full'] .sd-slot--scale,
-  .sd-layout[data-sheet='half'] .sd-slot--map,
-  .sd-layout[data-sheet='full'] .sd-slot--map {
+  .sd-slot--time .sd-time__speed {
+    min-width: 66px;
+  }
+  .sd-slot--time .sd-time__date {
+    margin: 0;
+    padding: 0 var(--sd-s-2);
+  }
+}
+@container sd (max-width: 400px) {
+  .sd-slot--time .sd-time__date {
+    order: 5;
+    flex: 1 0 100%;
+    padding: 2px 0 4px;
+    border: 0;
+    text-align: center;
+    grid-auto-flow: column;
+    justify-content: center;
+    gap: var(--sd-s-2);
+  }
+  .sd-layout[data-sheet="half"] .sd-slot--time,
+  .sd-layout[data-sheet="half"] .sd-slot--scale,
+  .sd-layout[data-sheet="full"] .sd-slot--time,
+  .sd-layout[data-sheet="full"] .sd-slot--scale,
+  .sd-layout[data-sheet="half"] .sd-slot--map,
+  .sd-layout[data-sheet="full"] .sd-slot--map {
     display: none;
   }
 }

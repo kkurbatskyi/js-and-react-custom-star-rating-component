@@ -71,7 +71,11 @@ export function TopBar() {
                     {c.label}
                   </span>
                 ) : (
-                  <button type="button" className="sd-crumbs__link" onClick={() => goToTarget(c.target)}>
+                  <button
+                    type="button"
+                    className="sd-crumbs__link"
+                    onClick={() => goToTarget(c.target)}
+                  >
                     {c.label}
                   </button>
                 )}
@@ -106,7 +110,12 @@ export function TopBar() {
         >
           <Icon name={audio ? 'sound' : 'mute'} size={19} />
         </button>
-        <PanelButton panel="help" icon="help" label="Help and shortcuts" className="sd-topbar__help" />
+        <PanelButton
+          panel="help"
+          icon="help"
+          label="Help and shortcuts"
+          className="sd-topbar__help"
+        />
       </div>
 
       {flying && progress !== null && (

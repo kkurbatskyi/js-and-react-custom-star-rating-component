@@ -1,5 +1,5 @@
 /** Shared React hooks and the layout context. */
-import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import type { SelectionRef } from '../core/types';
 import { useStore } from '../state/store';
 import { getUniverse } from '../universe';
@@ -32,7 +32,11 @@ export interface LayoutInfo {
 
 export const COMPACT_MAX_WIDTH = 720;
 
-export const LayoutContext = createContext<LayoutInfo>({ width: 1280, height: 800, compact: false });
+export const LayoutContext = createContext<LayoutInfo>({
+  width: 1280,
+  height: 800,
+  compact: false,
+});
 export const useLayout = (): LayoutInfo => useContext(LayoutContext);
 
 /** True on Apple platforms, where the search shortcut is ⌘K rather than Ctrl+K. */
@@ -85,4 +89,31 @@ export function useFocusTrap<T extends HTMLElement>(active: boolean) {
     };
   }, [active]);
   return ref;
+}
+
+const REDUCE_QUERY = '(prefers-reduced-motion: reduce)';
+
+function subscribeReduce(onChange: () => void): () => void {
+  try {
+    const mq = window.matchMedia(REDUCE_QUERY);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  } catch {
+    return () => undefined;
+  }
+}
+
+const osReducesMotion = (): boolean => {
+  try {
+    return window.matchMedia(REDUCE_QUERY).matches;
+  } catch {
+    return false;
+  }
+};
+
+/** Reduced motion, from the OS setting or the in-app switch (either one wins). */
+export function useReducedMotion(): boolean {
+  const os = useSyncExternalStore(subscribeReduce, osReducesMotion, () => false);
+  const setting = useStore((s) => s.settings.reducedMotion);
+  return os || setting;
 }

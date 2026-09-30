@@ -20,7 +20,10 @@ export function GalaxyCard() {
   const shape = p.barLengthLy > 0 ? 'Barred spiral' : 'Spiral galaxy';
   return (
     <>
-      <header className="sd-info__head" style={{ '--sd-tint': 'var(--sd-accent-2)' } as CSSProperties}>
+      <header
+        className="sd-info__head"
+        style={{ '--sd-tint': 'var(--sd-accent-2)' } as CSSProperties}
+      >
         <div className="sd-info__eyebrow">
           <Icon name="galaxy" size={15} />
           <span className="sd-eyebrow">Galaxy</span>
@@ -35,8 +38,9 @@ export function GalaxyCard() {
       </header>
       <div className="sd-info__scroll">
         <p className="sd-blurb">
-          About {formatCount(p.estimatedStarCount)} stars in a disk {formatLy(p.radiusLy * 2)} across. Home is{' '}
-          {formatLy(home)} from the middle, in the suburbs, which is where the good restaurants are.
+          About {formatCount(p.estimatedStarCount)} stars in a disk {formatLy(p.radiusLy * 2)}{' '}
+          across. Home is {formatLy(home)} from the middle, in the suburbs, which is where the good
+          restaurants are.
         </p>
         <section className="sd-block">
           <h3 className="sd-heading">Begin</h3>

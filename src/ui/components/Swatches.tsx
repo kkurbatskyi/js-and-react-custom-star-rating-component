@@ -43,9 +43,12 @@ export function PlanetSwatch({ body, size = 28, className }: PlanetSwatchProps) 
           cx: 20 + (next() - 0.5) * r * 1.5,
           cy: 20 + (next() - 0.5) * r * 1.5,
           rx: (watery ? 3.5 + (1 - body.oceanCoverage) * 9 : 4 + next() * 4) * (0.7 + next() * 0.6),
-          ry: (watery ? 2.5 + (1 - body.oceanCoverage) * 6 : 2.5 + next() * 3) * (0.7 + next() * 0.6),
+          ry:
+            (watery ? 2.5 + (1 - body.oceanCoverage) * 6 : 2.5 + next() * 3) * (0.7 + next() * 0.6),
           rot: next() * 180,
-          color: rgbToCss(surfaceColors[i % Math.max(1, Math.min(2, surfaceColors.length))] ?? swatch),
+          color: rgbToCss(
+            surfaceColors[i % Math.max(1, Math.min(2, surfaceColors.length))] ?? swatch,
+          ),
         }));
   const wisps =
     banded || size < 20 || cloudCoverage < 0.15
@@ -171,7 +174,14 @@ export function StarGlyph({
   const color = rgbToCss(saturateRGB(star.colorRGB, 1.25));
   if (star.kind === 'black-hole') {
     return (
-      <svg className={className} width={size} height={size} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <svg
+        className={className}
+        width={size}
+        height={size}
+        viewBox="0 0 20 20"
+        aria-hidden="true"
+        focusable="false"
+      >
         <ellipse
           cx="10"
           cy="10"

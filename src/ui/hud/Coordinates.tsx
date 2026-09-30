@@ -14,7 +14,10 @@ export function Coordinates() {
   const [x, y, z] = useStore((s) => s.cameraLy);
   const distanceKm = useStore((s) => s.cameraDistanceKm);
   return (
-    <dl className="sd-coords sd-mono" aria-label="Camera position in galactic coordinates, light-years">
+    <dl
+      className="sd-coords sd-mono"
+      aria-label="Camera position in galactic coordinates, light-years"
+    >
       <p className="sd-coords__head sd-eyebrow" aria-hidden="true">
         Position · ly
       </p>

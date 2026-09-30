@@ -36,8 +36,15 @@ import { createFieldUniforms, type GalaxyFieldUniforms, setFieldMap } from './un
 /** Pink Hα of diffuse ionised gas (linear sRGB, unit luminance applied below). */
 const HII_GLOW: readonly [number, number, number] = [1, 0.3, 0.46];
 const NOISE_SIZE = 64;
-/** Near-camera dust structure fades over this distance (ly). */
-const NEAR_DUST_RANGE_LY = 2500;
+/** Population colours blend from inner to outer over this radius, × the home radius. */
+const COLOR_GRADIENT = 0.8;
+/**
+ * The volume's unresolved light fades in over this multiple of `nearFadeLy` (the starfield owns
+ * the foreground; farther light also keeps the band thin and the high-latitude sky dark).
+ */
+const VOLUME_NEAR_FADE = 1.6;
+/** 3D clumping/mottling (instead of the planar map's) fades over this distance (ly). */
+const NEAR_DUST_RANGE_LY = 8000;
 
 export class GalaxyVisual implements IGalaxyVisual {
   readonly object = new Group();
@@ -75,6 +82,7 @@ export class GalaxyVisual implements IGalaxyVisual {
       this.profile.particles,
       this.particleOptions(),
     );
+    this.volume.guided = this.profile.guidedUpsample;
     this.object.name = 'GalaxyVisual';
     this.object.add(this.volume.mesh, this.particles.object);
     this.configureVolume();
@@ -95,6 +103,7 @@ export class GalaxyVisual implements IGalaxyVisual {
     this.profile = next;
     this.volume.scale = next.volumeScale;
     this.volume.steps = next.volumeSteps;
+    this.volume.guided = next.guidedUpsample;
     this.volume.resetHistory();
   }
 
@@ -128,7 +137,7 @@ export class GalaxyVisual implements IGalaxyVisual {
     p.uEmission.value = cal.emission * o.intensity;
     p.uLosSamples.value = this.profile.losSamples;
     this.particles.update(frame, o.cameraLy);
-    this.volume.render(frame, o.cameraLy, o.intensity, o.nearFadeLy);
+    this.volume.render(frame, o.cameraLy, o.intensity, VOLUME_NEAR_FADE * o.nearFadeLy);
   }
 
   dispose(): void {
@@ -146,6 +155,8 @@ export class GalaxyVisual implements IGalaxyVisual {
       diskK: l.diskK,
       thickK: l.thickK,
       youngK: l.youngK,
+      innerYoungK: l.innerYoungK,
+      gradientLy: COLOR_GRADIENT * HOME_RADIUS_FRACTION * this.structure.gpu.radiusLy,
       saturation: l.saturation,
       kneeLight: this.calibrate().ridgeLight * l.coreKnee,
       kneeGamma: l.coreGamma,
@@ -205,12 +216,14 @@ export class GalaxyVisual implements IGalaxyVisual {
     setColor(u.uColThinInner.value, l.bulgeK + 500, kE * L.disk * (1 - share.disk));
     setColor(u.uColThick.value, l.thickK, kE * L.disk * (1 - share.disk));
     setColor(u.uColArm.value, l.youngK, kE * L.arm * (1 - share.arm));
+    setColor(u.uColArmInner.value, l.innerYoungK, kE * L.arm * (1 - share.arm));
+    u.uArmDetail.value.set(l.armMottling, l.beading);
     setColor(u.uColSpheroid.value, l.bulgeK, kE * L.bulge * (1 - share.bulge));
     const hiiLum = 0.2126 * HII_GLOW[0] + 0.7152 * HII_GLOW[1] + 0.0722 * HII_GLOW[2];
     const hii = (kE * L.arm * g.armStrength * l.hiiGlow) / hiiLum;
     u.uColHii.value.set(HII_GLOW[0] * hii, HII_GLOW[1] * hii, HII_GLOW[2] * hii);
     u.uMottle.value = l.mottling;
-    u.uLight.value.set(L.disk, L.arm, L.bulge, 0.8 * HOME_RADIUS_FRACTION * g.radiusLy);
+    u.uLight.value.set(L.disk, L.arm, L.bulge, COLOR_GRADIENT * HOME_RADIUS_FRACTION * g.radiusLy);
     u.uKnee.value.set(cal.ridgeLight * l.coreKnee, l.coreGamma);
     const dustHeight = g.dustHeightLy * l.dustThickness;
     u.uStepK.value.w = dustHeight;

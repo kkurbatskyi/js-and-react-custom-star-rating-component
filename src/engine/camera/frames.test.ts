@@ -52,7 +52,9 @@ describe('frames', () => {
     const ly = galacticLyOf(planet, offset, new Vector3());
     const km = systemKmOf(planet, offset, point('s', star, new Vector3()), new Vector3());
     // The S position rotated back and added to the star must give the same galactic position.
-    const viaS = star.clone().addScaledVector(systemToGalactic(km, tilt, new Vector3()), 1 / KM_PER_LY);
+    const viaS = star
+      .clone()
+      .addScaledVector(systemToGalactic(km, tilt, new Vector3()), 1 / KM_PER_LY);
     expect(viaS.distanceTo(ly) * KM_PER_LY).toBeLessThan(100);
     // And the camera sits at planet + offset in S.
     const expectedS = galacticToSystem(offset, tilt, new Vector3()).add(planet.posS);

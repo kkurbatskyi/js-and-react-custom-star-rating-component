@@ -23,7 +23,13 @@ import {
   type LayerRenderSpec,
   type PickHit,
 } from '../../engine/contracts';
-import type { IPlanetVisual, PlanetUniforms, Quality, ScreenDisc, VisualFrame } from '../../render/contracts';
+import type {
+  IPlanetVisual,
+  PlanetUniforms,
+  Quality,
+  ScreenDisc,
+  VisualFrame,
+} from '../../render/contracts';
 import {
   bodyLabel,
   createPlanetUniforms,
@@ -44,8 +50,9 @@ import {
 import { buildSlices, type Interval } from './depthSlices';
 import type { BodyState, SystemAssets } from './SystemAssets';
 
-const FULL_ON_PX = 90;
-const FULL_OFF_PX = 70;
+/** Full visual above this projected radius (px), lite again below FULL_OFF_PX (hysteresis). */
+const FULL_ON_PX = 28;
+const FULL_OFF_PX = 20;
 /** GPU bake budget per frame for the focus / destination full visuals, ms. */
 const PREPARE_BUDGET_MS = 3;
 /** The focus's own label is redundant once its disk is this large (radius, px). */
@@ -106,7 +113,14 @@ export class PlanetLayer implements Layer {
       b.owner = 'planet';
       b.rel.subVectors(b.posS, anchor.posS).applyQuaternion(assets.frame).sub(offset);
       const d = b.rel.length();
-      b.onScreen = projectRelative(b.rel, camera, frame.width, frame.height, this.scratch, this.screen);
+      b.onScreen = projectRelative(
+        b.rel,
+        camera,
+        frame.width,
+        frame.height,
+        this.scratch,
+        this.screen,
+      );
       b.screenX = this.screen.x;
       b.screenY = this.screen.y;
       b.radiusPx = (b.body.radiusKm / Math.max(d, b.body.radiusKm)) * ppr;
@@ -199,10 +213,16 @@ export class PlanetLayer implements Layer {
     let slot = 0;
     for (let i = this.range.start; i < this.range.end; i++) {
       const b = assets.bodies[i];
-      if (!b.onScreen) continue;
+      if (!b.onScreen || this.hiddenBehindFamily(assets, i)) continue;
       const isFocus = i === this.focusIndex;
       if (isFocus && b.radiusPx > FOCUS_LABEL_MAX_PX) continue;
-      const tier = isFocus ? LabelTier.focus : b.id === sel ? LabelTier.selected : b.moon ? LabelTier.moon : LabelTier.planet;
+      const tier = isFocus
+        ? LabelTier.focus
+        : b.id === sel
+          ? LabelTier.selected
+          : b.moon
+            ? LabelTier.moon
+            : LabelTier.planet;
       const rank = Math.min(998, Math.round(Math.log10(b.body.radiusKm) * 150));
       const marker = b.id === sel && !isFocus ? 'ring' : b.radiusPx < 3 ? 'dot' : null;
       const sub = b.id === sel && !isFocus ? formatDistanceKm(b.rel.length()) : undefined;
@@ -230,6 +250,19 @@ export class PlanetLayer implements Layer {
     if (!h?.body || !h.system) return;
     const v = this.ctx.fullVisuals.get(h.body, h.system);
     if (!v.ready) v.prepare(this.ctx.engine.renderer, PREPARE_BUDGET_MS);
+  }
+
+  /** True when body i's centre is behind the disc of a nearer member of the local group. */
+  private hiddenBehindFamily(assets: SystemAssets, i: number): boolean {
+    const b = assets.bodies[i];
+    const depth = b.rel.lengthSq();
+    for (let j = this.range.start; j < this.range.end; j++) {
+      if (j === i) continue;
+      const c = assets.bodies[j];
+      if (!c.onScreen || c.rel.lengthSq() >= depth) continue;
+      if (Math.hypot(b.screenX - c.screenX, b.screenY - c.screenY) < c.radiusPx) return true;
+    }
+    return false;
   }
 
   private buildOccluders(bodies: readonly BodyState[], start: number, end: number): void {

@@ -19,8 +19,8 @@
 import { Quaternion, Vector3 } from 'three';
 import { DEG_TO_RAD } from '../../core/math';
 import { KM_PER_LY } from '../../core/units';
-import { type FocusHandle, isGalacticCentre } from './focus';
 import { nearestAngle } from './damping';
+import { type FocusHandle, isGalacticCentre } from './focus';
 
 export interface OrbitPose {
   yaw: number;
@@ -58,7 +58,12 @@ export function orbitQuaternion(
 }
 
 /** Unit direction from the focus to the camera (galactic axes) for an orbit pose in `frame`. */
-export function orbitDirection(frame: Quaternion, yaw: number, pitch: number, out: Vector3): Vector3 {
+export function orbitDirection(
+  frame: Quaternion,
+  yaw: number,
+  pitch: number,
+  out: Vector3,
+): Vector3 {
   const c = Math.cos(pitch);
   return out.set(c * Math.sin(yaw), Math.sin(pitch), c * Math.cos(yaw)).applyQuaternion(frame);
 }
@@ -81,21 +86,30 @@ export function directionToYawPitch(
   return out;
 }
 
-/** The composed default viewing distance for a focus, km. */
-export function framingDistanceKm(h: FocusHandle): number {
+/**
+ * How much farther to stand on a portrait screen: the framings above are composed for the vertical
+ * field of view, and a phone's horizontal one is narrower (tan-space ratio = aspect).
+ */
+export function portraitFactor(aspect: number): number {
+  return aspect < 1 ? 1 / Math.max(aspect, 0.4) : 1;
+}
+
+/** The composed default viewing distance for a focus, km (`aspect` = viewport width / height). */
+export function framingDistanceKm(h: FocusHandle, aspect = 1): number {
+  const fit = portraitFactor(aspect);
   let d: number;
   if (h.kind === 'galaxy') {
-    return isGalacticCentre(h) ? OVERVIEW_DISTANCE_KM : NEIGHBOURHOOD_DISTANCE_KM;
+    return (isGalacticCentre(h) ? OVERVIEW_DISTANCE_KM : NEIGHBOURHOOD_DISTANCE_KM) * fit;
   }
   if (h.body) {
     const ring = h.body.rings?.outerRadiusKm ?? 0;
-    d = Math.max(4 * h.radiusKm, 2.4 * ring);
+    d = Math.max(4 * h.radiusKm, 2.4 * ring) * fit;
     return Math.min(Math.max(d, 1.2 * h.minDistanceKm), 0.8 * h.planetZoneKm);
   }
   const system = h.system;
   let outer = 0;
   for (const p of system?.planets ?? []) outer = Math.max(outer, p.orbit.semiMajorAxisKm);
-  d = outer > 0 ? 2.5 * outer : 60 * h.radiusKm;
+  d = (outer > 0 ? 2.5 * outer : 60 * h.radiusKm) * fit;
   return Math.min(Math.max(d, 1.5 * h.minDistanceKm), 0.8 * h.maxDistanceKm);
 }
 
@@ -105,9 +119,14 @@ const _pose = { yaw: 0, pitch: 0 };
  * The arrival pose for a flight to `h`. `fromDirG` is the unit direction from `h` to the camera at
  * departure (galactic axes); the arrival azimuth stays as close to it as the composition allows.
  */
-export function arrivalPose(h: FocusHandle, fromDirG: Vector3, out: OrbitPose): OrbitPose {
+export function arrivalPose(
+  h: FocusHandle,
+  fromDirG: Vector3,
+  out: OrbitPose,
+  aspect = 1,
+): OrbitPose {
   directionToYawPitch(fromDirG, h.frame, _pose);
-  out.distanceKm = framingDistanceKm(h);
+  out.distanceKm = framingDistanceKm(h, aspect);
   if (h.kind === 'galaxy') {
     out.yaw = _pose.yaw;
     out.pitch = isGalacticCentre(h) ? OVERVIEW_PITCH : NEIGHBOURHOOD_PITCH;

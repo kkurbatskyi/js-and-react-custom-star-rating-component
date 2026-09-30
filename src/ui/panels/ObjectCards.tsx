@@ -25,25 +25,25 @@ import { engineCommands } from '../../state/bridge';
 import { useStore } from '../../state/store';
 import { CopyLinkButton } from '../components/CopyLinkButton';
 import { Icon } from '../components/Icon';
-import { StarRating } from '../components/StarRating';
 import { CompositionBars, Meter, SpecList } from '../components/Specs';
+import { StarRating } from '../components/StarRating';
 import { PlanetSwatch, StarGlyph } from '../components/Swatches';
 import { useUniverse } from '../hooks';
 import { flyTo, focusIs } from '../lib/actions';
 import {
-  type ObjectModel,
   bodyOf,
+  distanceLy,
   habitabilityLabel,
   homeDistanceLabel,
   LIFE_LABEL,
+  type ObjectModel,
   objectName,
   planetTypeLabel,
   ratingWord,
   starClassLabel,
   surveyRatingOf,
-  distanceLy,
 } from '../lib/model';
-import { PlanetRow, SystemOverview, kelvin } from './SystemOverview';
+import { kelvin, PlanetRow, SystemOverview } from './SystemOverview';
 
 // ───────────────────────────────────────────────────────────── header
 
@@ -128,7 +128,15 @@ function BookmarkButton({ id, name }: { id: string; name: string }) {
 }
 
 /** "Your rating" (interactive) and "Surveyor's rating" (read-only, halves). */
-export function RatingPlate({ id, name, survey }: { id: string; name: string; survey: number | null }) {
+export function RatingPlate({
+  id,
+  name,
+  survey,
+}: {
+  id: string;
+  name: string;
+  survey: number | null;
+}) {
   const rating = useStore((s) => s.ratings[id] ?? 0);
   const rate = useStore((s) => s.rate);
   const clear = useStore((s) => s.clearRating);
@@ -138,7 +146,11 @@ export function RatingPlate({ id, name, survey }: { id: string; name: string; su
     <section className="sd-plate" aria-label="Ratings">
       <div className="sd-plate__top">
         <span className="sd-eyebrow">Your rating</span>
-        <span className="sd-plate__word" aria-live="polite" data-set={rating > 0 || preview > 0 ? '' : undefined}>
+        <span
+          className="sd-plate__word"
+          aria-live="polite"
+          data-set={rating > 0 || preview > 0 ? '' : undefined}
+        >
           {word}
         </span>
       </div>
@@ -156,7 +168,15 @@ export function RatingPlate({ id, name, survey }: { id: string; name: string; su
       {survey !== null && (
         <div className="sd-plate__survey">
           <span className="sd-plate__survey-label">Surveyor’s rating</span>
-          <StarRating label={name} value={survey} readOnly size={14} tone="muted" showValue caption="Surveyor’s rating" />
+          <StarRating
+            label={name}
+            value={survey}
+            readOnly
+            size={14}
+            tone="muted"
+            showValue
+            caption="Surveyor’s rating"
+          />
         </div>
       )}
     </section>
@@ -177,6 +197,7 @@ export function FlyButton({ model, compact = false }: { model: ObjectModel; comp
     <button
       type="button"
       className="sd-btn sd-btn--primary sd-fly"
+      title={here ? 'Reset the view' : 'Fly here (F)'}
       disabled={headingHere}
       aria-busy={headingHere}
       onClick={() => (here ? engineCommands().resetView() : flyTo(ref))}
@@ -194,7 +215,7 @@ export function ActionRow({ model }: { model: ObjectModel }) {
   return (
     <div className="sd-info__actions">
       <FlyButton model={model} />
-      <CopyLinkButton id={model.id} name={objectName(model)} />
+      <CopyLinkButton key={model.id} id={model.id} name={objectName(model)} />
     </div>
   );
 }
@@ -253,13 +274,22 @@ export function StarBody({ model }: { model: Extract<ObjectModel, { kind: 'star'
     star.temperatureK > 0 && { label: 'Temperature', value: formatTemperature(star.temperatureK) },
     { label: 'Mass', value: formatMassSolar(star.massSolar) },
     { label: 'Radius', value: formatRadiusSolar(star.radiusSolar) },
-    star.luminositySolar > 0 && { label: 'Luminosity', value: formatLuminositySolar(star.luminositySolar) },
+    star.luminositySolar > 0 && {
+      label: 'Luminosity',
+      value: formatLuminositySolar(star.luminositySolar),
+    },
     { label: 'Age', value: formatAgeGyr(star.ageGyr) },
     star.pulsarPeriodSec !== undefined && {
       label: 'Pulse period',
       value: `${formatNumber(star.pulsarPeriodSec, { sig: 3 })}${NBSP}s`,
     },
-    { label: 'From home', value: fromHome < 0.05 ? 'Home' : homeDistanceLabel(universe, star.posLy).replace(' from home', '') },
+    {
+      label: 'From home',
+      value:
+        fromHome < 0.05
+          ? 'Home'
+          : homeDistanceLabel(universe, star.posLy).replace(' from home', ''),
+    },
     { label: 'Planets', value: system ? String(system.planets.length) : '—' },
   ];
   return (
@@ -269,7 +299,11 @@ export function StarBody({ model }: { model: Extract<ObjectModel, { kind: 'star'
         <h3 className="sd-heading">Specifications</h3>
         <SpecList rows={rows} />
       </section>
-      {system ? <SystemOverview system={system} /> : <p className="sd-empty">No survey on file for this system.</p>}
+      {system ? (
+        <SystemOverview system={system} />
+      ) : (
+        <p className="sd-empty">No survey on file for this system.</p>
+      )}
       {system && <Tags tags={system.tags} />}
     </>
   );
@@ -317,7 +351,10 @@ export function BodyBody({ model }: { model: Extract<ObjectModel, { kind: 'plane
     { label: 'Gravity', value: formatGravityG(body.surfaceGravityG) },
     { label: 'Density', value: formatDensityGcc(body.densityGcc) },
     { label: 'Temperature', value: formatTemperature(body.surfaceTempK) },
-    { label: 'Pressure', value: body.atmosphere ? formatPressureAtm(body.atmosphere.surfacePressureAtm) : 'Airless' },
+    {
+      label: 'Pressure',
+      value: body.atmosphere ? formatPressureAtm(body.atmosphere.surfacePressureAtm) : 'Airless',
+    },
     { label: `Orbits ${parentName}`, value: formatDistanceKm(body.orbit.semiMajorAxisKm) },
     { label: 'Year', value: formatPeriodDays(body.orbit.periodDays) },
     { label: 'Day', value: dayLength(body) },
@@ -340,7 +377,9 @@ export function BodyBody({ model }: { model: Extract<ObjectModel, { kind: 'plane
         <p className={`sd-life${body.life === 'none' ? '' : ' is-alive'}`}>
           <Icon name="life" size={15} />
           {life}
-          {body.life === 'civilization' && <span className="sd-life__note"> — lights on the night side</span>}
+          {body.life === 'civilization' && (
+            <span className="sd-life__note"> — lights on the night side</span>
+          )}
         </p>
       </section>
       <section className="sd-block">
@@ -381,7 +420,8 @@ export function BodyBody({ model }: { model: Extract<ObjectModel, { kind: 'plane
                 <span className="sd-row__main">
                   <span className="sd-row__name">{model.star.name}</span>
                   <span className="sd-row__meta">
-                    {model.star.spectralType} · planet {model.planet.index + 1} of {model.system.planets.length}
+                    {model.star.spectralType} · planet {model.planet.index + 1} of{' '}
+                    {model.system.planets.length}
                   </span>
                 </span>
                 <Icon name="chevronRight" size={14} className="sd-row__go" />

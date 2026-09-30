@@ -76,9 +76,13 @@ export class InputController {
       const pitch = (h.has('orbit-up') ? 1 : 0) - (h.has('orbit-down') ? 1 : 0);
       const zoom = (h.has('zoom-out') ? 1 : 0) - (h.has('zoom-in') ? 1 : 0);
       if (yaw !== 0 || pitch !== 0) {
-        this.actions.orbitBy(yaw * KEY_ORBIT_RAD_PER_SEC * dtSec, pitch * KEY_ORBIT_RAD_PER_SEC * dtSec);
+        this.actions.orbitBy(
+          yaw * KEY_ORBIT_RAD_PER_SEC * dtSec,
+          pitch * KEY_ORBIT_RAD_PER_SEC * dtSec,
+        );
       }
-      if (zoom !== 0) this.actions.zoomBy(Math.exp(zoom * KEY_ZOOM_LOG_PER_SEC * dtSec), null, null);
+      if (zoom !== 0)
+        this.actions.zoomBy(Math.exp(zoom * KEY_ZOOM_LOG_PER_SEC * dtSec), null, null);
     }
     const now = performance.now();
     if (this.hoverPending && now - this.lastHover >= HOVER_INTERVAL_MS) {
@@ -112,7 +116,8 @@ export class InputController {
 
   private input(e: PointerEvent) {
     const { x, y } = this.local(e);
-    const kind: PointerKind = e.pointerType === 'touch' ? 'touch' : e.pointerType === 'pen' ? 'pen' : 'mouse';
+    const kind: PointerKind =
+      e.pointerType === 'touch' ? 'touch' : e.pointerType === 'pen' ? 'pen' : 'mouse';
     return {
       id: e.pointerId,
       x,
