@@ -22,7 +22,7 @@ import { type AtmosphereParams, extinctionAt } from './params';
 export const LUT_MU_SIZE = 128;
 /** Texture height: the radius axis. */
 export const LUT_R_SIZE = 32;
-const INTEGRATION_STEPS = 48;
+const INTEGRATION_STEPS = 96;
 
 export interface LutGeometry {
   /** Planet radius, km. */
@@ -45,28 +45,57 @@ export function distanceToTop(g: LutGeometry, r: number, mu: number): number {
   return -r * mu + Math.sqrt(Math.max(disc, 0));
 }
 
-/** Optical depth (per channel) from radius r along direction cosine mu to the top of the atmosphere. */
+/** Extinction coefficients sampled uniformly in altitude, so the integrator does table lookups, not exp(). */
+export interface ExtinctionTable {
+  readonly topKm: number;
+  readonly n: number;
+  /** (n + 1) x 3 values (1/km), altitude i * topKm / n. */
+  readonly data: Float64Array;
+}
+
+export function makeExtinctionTable(p: AtmosphereParams, n = 2048): ExtinctionTable {
+  const data = new Float64Array((n + 1) * 3);
+  for (let i = 0; i <= n; i++) {
+    const e = extinctionAt(p, (i * p.topKm) / n);
+    data[i * 3] = e[0];
+    data[i * 3 + 1] = e[1];
+    data[i * 3 + 2] = e[2];
+  }
+  return { topKm: p.topKm, n, data };
+}
+
+/**
+ * Optical depth (per channel) from radius r along direction cosine mu to the top of the atmosphere:
+ * composite Simpson over the path with linear interpolation of the extinction table.
+ */
 export function opticalDepthToTop(
-  p: AtmosphereParams,
+  table: ExtinctionTable,
   g: LutGeometry,
   r: number,
   mu: number,
   steps = INTEGRATION_STEPS,
 ): [number, number, number] {
   const d = distanceToTop(g, r, mu);
-  const ds = d / steps;
+  const ds = d / steps; // `steps` must be even
+  const scale = table.n / table.topKm;
+  const data = table.data;
   let a = 0;
   let b = 0;
   let c = 0;
-  for (let i = 0; i < steps; i++) {
-    const s = (i + 0.5) * ds;
-    const rs = Math.sqrt(r * r + s * s + 2 * r * mu * s);
-    const e = extinctionAt(p, rs - g.rp);
-    a += e[0];
-    b += e[1];
-    c += e[2];
+  for (let i = 0; i <= steps; i++) {
+    const s = i * ds;
+    const rs = Math.sqrt(Math.max(r * r + s * s + 2 * r * mu * s, 0));
+    const x = Math.min(Math.max((rs - g.rp) * scale, 0), table.n - 1e-9);
+    const j = Math.floor(x);
+    const f = x - j;
+    const o = j * 3;
+    const w = i === 0 || i === steps ? 1 : i % 2 === 1 ? 4 : 2;
+    a += w * ((data[o] ?? 0) * (1 - f) + (data[o + 3] ?? 0) * f);
+    b += w * ((data[o + 1] ?? 0) * (1 - f) + (data[o + 4] ?? 0) * f);
+    c += w * ((data[o + 2] ?? 0) * (1 - f) + (data[o + 5] ?? 0) * f);
   }
-  return [a * ds, b * ds, c * ds];
+  const k = ds / 3;
+  return [a * k, b * k, c * k];
 }
 
 /** Map table coordinates (0..1 each) to the (r, mu) they encode. */
@@ -83,13 +112,14 @@ export function lutToRMu(g: LutGeometry, xMu: number, xR: number): { r: number; 
 /** RGBA half-float texels, row-major: LUT_R_SIZE rows of LUT_MU_SIZE (alpha unused). */
 export function buildTransmittanceLut(p: AtmosphereParams): Uint16Array {
   const g = lutGeometry(p);
+  const table = makeExtinctionTable(p);
   const data = new Uint16Array(LUT_MU_SIZE * LUT_R_SIZE * 4);
   const one = DataUtils.toHalfFloat(1);
   let o = 0;
   for (let j = 0; j < LUT_R_SIZE; j++) {
     for (let i = 0; i < LUT_MU_SIZE; i++) {
       const { r, mu } = lutToRMu(g, i / (LUT_MU_SIZE - 1), j / (LUT_R_SIZE - 1));
-      const od = opticalDepthToTop(p, g, r, mu);
+      const od = opticalDepthToTop(table, g, r, mu);
       data[o++] = DataUtils.toHalfFloat(od[0]);
       data[o++] = DataUtils.toHalfFloat(od[1]);
       data[o++] = DataUtils.toHalfFloat(od[2]);

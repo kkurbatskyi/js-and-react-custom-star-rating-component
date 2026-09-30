@@ -111,6 +111,7 @@ export class StarVisual implements IStarVisual {
     uGain: new Uniform(0.2),
     uFall: new Uniform(3.2),
     uHaloGain: new Uniform(0.03),
+    uRim: new Uniform(0.9),
     uStreamer: new Uniform(0.7),
     uChromo: new Uniform(0.8),
     uProm: new Uniform(0),
@@ -199,6 +200,7 @@ export class StarVisual implements IStarVisual {
     c.uGain.value = l.coronaGain;
     c.uFall.value = l.coronaFall;
     c.uHaloGain.value = l.haloGain;
+    c.uRim.value = l.rimGlow;
     c.uStreamer.value = l.streamers;
     c.uChromo.value = l.chromosphere;
     c.uProm.value = l.prominences;
@@ -353,7 +355,7 @@ export class StarVisual implements IStarVisual {
       u.uDiscPx.value = discPx * dpr;
       u.uIntensity.value = o.intensity;
       u.uBrightness.value = brightness;
-      u.uSaturation.value = 2.0 - 0.85 * smoothstep(6000, 12000, look.tempK);
+      u.uSaturation.value = 2.4 - 1.1 * smoothstep(6000, 12000, look.tempK);
       u.uTime.value = time;
       (u.uBodyFromView.value as Matrix3).setFromMatrix4(this.mBody.multiply(this.mView));
       this.updateFlare(time, u.uFlare.value as Vector4);

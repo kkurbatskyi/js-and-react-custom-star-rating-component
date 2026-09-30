@@ -29,6 +29,10 @@ export interface OrbitPose {
 }
 
 export const OVERVIEW_DISTANCE_KM = 110_000 * KM_PER_LY;
+/** The overview keeps the disk's full width inside the horizontal field of view, with this margin. */
+export const OVERVIEW_WIDTH_MARGIN = 1.06;
+/** The engine's default vertical field of view (framings are composed for it). */
+export const DEFAULT_FOV_Y = 50 * DEG_TO_RAD;
 export const OVERVIEW_PITCH = 35 * DEG_TO_RAD;
 export const NEIGHBOURHOOD_DISTANCE_KM = 40 * KM_PER_LY;
 export const NEIGHBOURHOOD_PITCH = 28 * DEG_TO_RAD;
@@ -94,12 +98,21 @@ export function portraitFactor(aspect: number): number {
   return aspect < 1 ? 1 / Math.max(aspect, 0.4) : 1;
 }
 
-/** The composed default viewing distance for a focus, km (`aspect` = viewport width / height). */
-export function framingDistanceKm(h: FocusHandle, aspect = 1): number {
+/**
+ * The composed default viewing distance for a focus, km (`aspect` = viewport width / height).
+ * The overview is composed for landscape (≈110 kly at 35°: the tilted disk fills the height); on
+ * narrow screens it stands back until the disk's whole diameter fits the HORIZONTAL field of view,
+ * tan(hfov/2) = aspect · tan(fovY/2): d ≥ R·margin / (aspect · tan(fovY/2)).
+ */
+export function framingDistanceKm(h: FocusHandle, aspect = 1, fovY = DEFAULT_FOV_Y): number {
   const fit = portraitFactor(aspect);
   let d: number;
   if (h.kind === 'galaxy') {
-    return (isGalacticCentre(h) ? OVERVIEW_DISTANCE_KM : NEIGHBOURHOOD_DISTANCE_KM) * fit;
+    if (!isGalacticCentre(h)) return NEIGHBOURHOOD_DISTANCE_KM * fit;
+    const radius = h.galaxyRadiusKm > 0 ? h.galaxyRadiusKm : 55_000 * KM_PER_LY;
+    const widthFit =
+      (radius * OVERVIEW_WIDTH_MARGIN) / (Math.max(aspect, 0.2) * Math.tan(fovY / 2));
+    return Math.max(OVERVIEW_DISTANCE_KM, widthFit);
   }
   if (h.body) {
     const ring = h.body.rings?.outerRadiusKm ?? 0;
@@ -124,9 +137,10 @@ export function arrivalPose(
   fromDirG: Vector3,
   out: OrbitPose,
   aspect = 1,
+  fovY = DEFAULT_FOV_Y,
 ): OrbitPose {
   directionToYawPitch(fromDirG, h.frame, _pose);
-  out.distanceKm = framingDistanceKm(h, aspect);
+  out.distanceKm = framingDistanceKm(h, aspect, fovY);
   if (h.kind === 'galaxy') {
     out.yaw = _pose.yaw;
     out.pitch = isGalacticCentre(h) ? OVERVIEW_PITCH : NEIGHBOURHOOD_PITCH;

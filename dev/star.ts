@@ -7,6 +7,8 @@
  *   ?r=<n>                 distance in stellar radii (overrides ?dist)
  *   ?lens=0                black holes: do not install the lensing post effect
  *   ?spin=<days/s>         simulation rate (default: the harness's)
+ *   ?mode=starfield        draw the SAME star as a starfield sprite (StarfieldVisual, ly units) instead of a
+ *                          StarVisual: compare probes of the two at equal ?r= to verify the photometry hand-off
  *
  * Harness parameters (?t=, ?quality=, ?ui=0, ?cam=…) work as usual (dev/README.md).
  */
@@ -15,6 +17,8 @@ import type { StarDetails } from '../src/core/types';
 import type { IStarVisual } from '../src/render/contracts';
 import type { LensingEffect } from '../src/render/star/lensing';
 import { StarVisual } from '../src/render/star/StarVisual';
+import { StarfieldVisual } from '../src/render/starfield/StarfieldVisual';
+import { KM_PER_LY } from '../src/core/units';
 import { createHarness } from './harness';
 import { makeStar, STAR_TYPES, type StarTypeName } from './starTypes';
 
@@ -24,6 +28,8 @@ const gallery = typeParam === 'gallery';
 const type = (STAR_TYPES as readonly string[]).includes(typeParam) ? (typeParam as StarTypeName) : 'G';
 const DIST: Record<string, number> = { close: 3.5, mid: 40, system: 215, far: 3000 };
 const distR = Number(url.get('r') ?? DIST[url.get('dist') ?? 'close'] ?? 3.5);
+
+const asStarfield = url.get('mode') === 'starfield';
 
 const GALLERY: StarTypeName[] = ['O', 'A', 'G', 'K', 'M', 'K-giant', 'M-supergiant', 'white-dwarf'];
 
@@ -72,6 +78,29 @@ if (gallery) {
 
 const pos = new THREE.Vector3();
 const ORIGIN = new THREE.Vector3();
+
+// Starfield mode: one catalogue star with this star's absolute magnitude and colour at the origin.
+let starfield: StarfieldVisual | null = null;
+const camLy = new THREE.Vector3();
+if (asStarfield && !gallery) {
+  const st = focusStar;
+  const block = {
+    key: '0.0.0.0',
+    level: 0,
+    cell: [0, 0, 0] as const,
+    originLy: [0, 0, 0] as const,
+    count: 1,
+    offsetsLy: new Float32Array([0, 0, 0]),
+    absMag: new Float32Array([st.absMag]),
+    luminositySolar: new Float32Array([st.luminositySolar]),
+    colorRGB: new Float32Array(st.colorRGB),
+    kind: new Uint8Array([0]),
+  };
+  starfield = new StarfieldVisual(h.quality);
+  starfield.setBlocks([block], new THREE.Vector3());
+  h.scene.add(starfield.object);
+  for (const it of items) it.visual.object.visible = false;
+}
 const lensParam = url.get('lens') !== '0';
 
 // Lensing post effect (black holes): installed lazily so pages without one stay cheap.
@@ -99,6 +128,21 @@ h.onFrame((f) => {
     } else {
       h.relative(ORIGIN, pos);
       d = pos.length();
+    }
+    if (starfield) {
+      camLy.copy(h.cameraWorldPosition).divideScalar(KM_PER_LY);
+      starfield.update(f, {
+        cameraLy: camLy,
+        hiddenStarId: null,
+        hiddenFade: 0,
+        selectedId: null,
+        hoveredId: null,
+        exposure: 1,
+      });
+      h.camera.near = 1e-12;
+      h.camera.far = 1e3;
+      h.camera.updateProjectionMatrix();
+      return;
     }
     it.visual.update(f, { positionKm: pos, intensity: 1 });
     near = Math.min(near, Math.max(d - 8 * R, 1e-4 * d, 1e-3));

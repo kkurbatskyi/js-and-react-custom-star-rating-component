@@ -215,11 +215,13 @@ uniform vec2 uEquator;       // projected equator direction on screen (unit)
 uniform float uGain;         // corona radiance at the limb, relative to uBrightness
 uniform float uFall;         // radial falloff exponent
 uniform float uHaloGain;     // wide glow (giants, hot stars)
+uniform float uRim;          // radiance of the thin luminous rim hugging the limb
 uniform float uStreamer;     // 0 smooth .. 1 strongly streamed
 uniform float uChromo;       // chromosphere ring strength
 uniform float uProm;         // prominence activity 0..1
 uniform float uFlareBoost;   // flare envelope 0..1 (brightens loops)
 uniform float uCoronaVis;    // 0..1 fade while the disc is only a few pixels wide
+uniform float uExtent;       // half size of the quad in stellar radii (the glow must reach 0 by then)
 
 in vec2 vUv;
 out vec4 fragColor;
@@ -237,15 +239,19 @@ void main() {
 
   // K-corona: bright, steep near the limb, shallower far out; streamers on top.
   float fall = pow(1.0 / x, uFall);
-  float sn = snoise(vec4(dir * 2.7 + uSeed, x * 0.11, uSeed * 0.5 + uTime * 0.012));
+  // Broad helmet streamers plus finer filaments; both drift slowly.
+  float a1 = snoise(vec4(dir * 1.7 + uSeed, x * 0.10, uSeed * 0.5 + uTime * 0.010));
+  float a2 = snoise(vec4(dir * 6.5 + uSeed * 2.0, x * 0.42, 5.0 + uTime * 0.020));
   float belt = pow(abs(dot(dir, uEquator)), 1.6);
-  float st = clamp(0.5 + 0.6 * sn + 0.3 * belt - 0.12, 0.0, 1.0);
-  float streamers = mix(1.0, 0.08 + 3.4 * st * st * st, uStreamer);
+  float st = clamp(0.5 + 0.55 * a1 + 0.3 * belt - 0.14 + 0.16 * a2, 0.0, 1.0);
+  float streamers = mix(1.0, 0.1 + 2.7 * st * st, uStreamer);
   float corona = uGain * fall * streamers;
-  corona += uHaloGain * pow(1.0 / x, 2.4);
+  corona += uHaloGain * pow(1.0 / x, 3.0);
 
   vec3 tint = mix(uColor, vec3(1.0), 0.55);
   vec3 rgb = tint * (uBrightness * corona);
+  // Luminous rim: the disc glows into its surroundings (chromospheric / scattered light).
+  rgb += mix(uColor, vec3(1.0), 0.35) * (uRim * exp(-(x - 1.0) / 0.07) * (0.75 + 0.25 * a1));
 
   // Thin chromosphere rim with spicule-like flicker along the limb.
   float px = uPxPerR;
@@ -289,6 +295,8 @@ void main() {
   // Flares light the whole limb region a little.
   rgb *= 1.0 + 0.6 * uFlareBoost * exp(-(x - 1.0) * 1.2);
 
+  // Window: everything drawn here reaches exactly zero at the quad edge (no visible rectangles).
+  rgb *= 1.0 - smoothstep(0.35 * uExtent, uExtent, r);
   float fade = uIntensity * uCoronaVis;
   fragColor = vec4(rgb * fade, 1.0);
 }

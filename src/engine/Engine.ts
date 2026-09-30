@@ -158,6 +158,7 @@ export class Engine {
         centre,
         (canvas.clientWidth || window.innerWidth) /
           Math.max(1, canvas.clientHeight || window.innerHeight),
+        this.fovDeg / RAD_TO_DEG,
       ),
     };
     this.rig = new CameraRig((t) => this.resolve(t), centre, pose, this.fovDeg / RAD_TO_DEG);

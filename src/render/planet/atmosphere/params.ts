@@ -159,7 +159,6 @@ export function deriveAtmosphere(body: BodyBase): AtmosphereParams | null {
   if (!atm || !hazeColor || atm.surfacePressureAtm < MIN_PRESSURE_ATM) return null;
 
   const R = body.radiusKm;
-  const p = atm.surfacePressureAtm;
   const hmax = Math.max(hazeColor[0], hazeColor[1], hazeColor[2], 1e-3);
   const tint: Vec3T = [hazeColor[0] / hmax, hazeColor[1] / hmax, hazeColor[2] / hmax];
   const kind = classify(body, tint[2] - tint[0]);
@@ -178,18 +177,18 @@ export function deriveAtmosphere(body: BodyBase): AtmosphereParams | null {
   };
 
   // Aerosol class table: zenith optical depth, scale height (in gas scale heights), asymmetry, blend of
-  // the tint towards white, multiple-scattering blend.
+  // the tint towards white, absorption strength, multiple-scattering blend.
   const clouds = clamp(body.appearance.cloudCoverage, 0, 1);
   const table: Record<
     AtmosphereKind,
-    { tau: number; height: number; g: number; white: number; ms: number }
+    { tau: number; height: number; g: number; white: number; absorb: number; ms: number }
   > = {
-    terran: { tau: 0.06 + 0.05 * clouds, height: 0.16, g: 0.76, white: 0.85, ms: 0.3 },
-    dusty: { tau: 0.55, height: 1.0, g: 0.62, white: 0.0, ms: 0.3 },
-    hazy: { tau: 2.6, height: 1.5, g: 0.55, white: 0.0, ms: 0.5 },
-    dense: { tau: 3.0, height: 1.0, g: 0.5, white: 0.15, ms: 0.6 },
-    'gas-giant': { tau: 0.7, height: 1.2, g: 0.5, white: 0.5, ms: 0.35 },
-    'ice-giant': { tau: 0.3, height: 1.2, g: 0.5, white: 0.2, ms: 0.35 },
+    terran: { tau: 0.06 + 0.05 * clouds, height: 0.16, g: 0.76, white: 0.85, absorb: 0.05, ms: 0.3 },
+    dusty: { tau: 0.55, height: 1.0, g: 0.62, white: 0.0, absorb: 1.2, ms: 0.3 },
+    hazy: { tau: 2.6, height: 1.5, g: 0.55, white: 0.0, absorb: 3.0, ms: 0.5 },
+    dense: { tau: 3.0, height: 1.0, g: 0.5, white: 0.15, absorb: 1.0, ms: 0.6 },
+    'gas-giant': { tau: 0.7, height: 1.2, g: 0.5, white: 0.5, absorb: 0.3, ms: 0.35 },
+    'ice-giant': { tau: 0.3, height: 1.2, g: 0.5, white: 0.2, absorb: 0.3, ms: 0.35 },
   };
   const a = table[kind];
   const mieHeight = Math.max(a.height * H, 0.4);
@@ -198,13 +197,13 @@ export function deriveAtmosphere(body: BodyBase): AtmosphereParams | null {
     lerp(tint[1], 1, a.white),
     lerp(tint[2], 1, a.white),
   ];
-  // Single-scattering albedo per channel: the strongest haze channel scatters almost conservatively,
-  // weak channels are absorbed (tholin and dust are dark in the blue).
-  const albedo = (c: 0 | 1 | 2): number => lerp(0.55, 0.98, mieTint[c]);
+  // The scattered colour follows the haze colour; the weak channels are additionally absorbed
+  // (tholin and dust are dark in the blue), so sunlight through the haze turns orange, not grey.
   const scat = (c: 0 | 1 | 2): number => (a.tau * mieTint[c]) / mieHeight;
+  const ext = (c: 0 | 1 | 2): number => scat(c) + (a.tau * a.absorb * (1 - mieTint[c])) / mieHeight;
   const mie = {
     scatter: [scat(0), scat(1), scat(2)] as Vec3T,
-    extinction: [scat(0) / albedo(0), scat(1) / albedo(1), scat(2) / albedo(2)] as Vec3T,
+    extinction: [ext(0), ext(1), ext(2)] as Vec3T,
     heightKm: mieHeight,
     g: a.g,
   };
@@ -229,8 +228,9 @@ export function deriveAtmosphere(body: BodyBase): AtmosphereParams | null {
     };
   }
 
+  // Cover the gas, the aerosol and (four widths above its centre) the absorber layer.
   const top = Math.min(
-    TOP_IN_SCALE_HEIGHTS * Math.max(H, mieHeight, absorber.centerKm / 3 + absorber.widthKm),
+    Math.max(TOP_IN_SCALE_HEIGHTS * Math.max(H, mieHeight), absorber.centerKm + 4 * absorber.widthKm),
     0.2 * R,
   );
   const partial = {

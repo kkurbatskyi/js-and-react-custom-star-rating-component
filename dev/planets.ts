@@ -5,6 +5,7 @@
  *   ?quality=low|medium|high   bake resolution (256 / 512 / 1024 per cube face); low is quick to iterate
  *   ?sun=<azimuthDeg>,<elevationDeg>   shared light, relative to the camera (default -38,18: from the upper left)
  *   ?labels=0                  hide the captions      ?cols=<n> bodies per row (default 4)
+ *   ?shells=0                  hide the sky specialist's atmosphere, clouds and rings (surface only)
  *
  * Layout. Every body is placed at its real size but at the distance that gives all of them the same
  * projected radius (rings included), so a 64 000 km giant and a 1 800 km moon fill their cells alike; a
@@ -146,12 +147,18 @@ function layout(): void {
 layout();
 window.addEventListener('resize', layout);
 
+const hideShells = params.get('shells') === '0';
+
 h.onFrame((f) => {
   for (const c of cells) {
     bodyOrientation(c.picked.body, f.simDays, c.q);
     c.q.multiply(c.spin);
     c.u.orientation.copy(c.q);
     c.visual.update(f, c.u);
+    // The sky specialist's shells re-enable themselves in update(): hide them again for surface-only shots.
+    if (hideShells) {
+      for (const child of c.visual.object.children) if (child.name !== 'surface') child.visible = false;
+    }
   }
 });
 

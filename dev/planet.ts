@@ -77,13 +77,14 @@ const visual = new PlanetVisual(body, { system }, h.quality, detail);
 h.scene.add(visual.object);
 // Compare mode: the same world as a 'lite' visual, drawn to the left of the full one.
 const twin = compare ? new PlanetVisual(body, { system }, h.quality, 'lite') : null;
-if (twin) {
-  h.scene.add(twin.object);
-  // Hold the screenshot until the lite twin (tiny bake, started from update()) is drawable too.
+if (twin) h.scene.add(twin.object);
+// Hold the screenshot until every visual is drawable: lite ones report `ready` at once but finish their
+// tiny bake and shader compile from update() a few frames later.
+for (const v of twin ? [visual, twin] : [visual]) {
   void h.waitFor(
     new Promise<void>((resolve) => {
       const off = h.onFrame(() => {
-        if (twin.drawable) {
+        if (v.drawable) {
           off();
           resolve();
         }
@@ -93,8 +94,11 @@ if (twin) {
 }
 const COMPARE_OFFSET_R = 1.6;
 window.__PLANET__ = visual;
-if (params.get('shells') === '0') {
-  // Judge the surface on its own: hide atmosphere, clouds and rings (the sky specialist's parts).
+/** ?shells=0 judges the surface on its own: hides atmosphere, clouds and rings (the sky specialist's parts). */
+const hideShells = params.get('shells') === '0';
+/** The shells re-enable themselves in update(), so hide them again after every update. */
+function applyShellVisibility(): void {
+  if (!hideShells) return;
   for (const child of visual.object.children) if (child.name !== 'surface') child.visible = false;
 }
 
@@ -163,8 +167,20 @@ if (params.get('moon') === '1' && moon) {
   u.occluders = [{ positionKm: occluderPos, radiusKm: moon.radiusKm }];
 }
 
+const origin = new THREE.Vector3();
+const worldUp = new THREE.Vector3(0, 1, 0);
+const right = new THREE.Vector3();
+const up = new THREE.Vector3();
+const RING_EXTENT = Math.min(2.4, body.rings ? body.rings.outerRadiusKm / R : 1);
+
 h.onFrame((f) => {
-  h.relative(new THREE.Vector3(0, 0, 0), rel);
+  h.relative(origin, rel);
+  // Tight depth range around the body, like the engine's per-slice near/far: the 24-bit depth buffer must
+  // resolve a planet's shells (surface, clouds, atmosphere) a fraction of a percent of R apart.
+  const dist = h.cameraWorldPosition.length();
+  h.camera.near = Math.max(R * 1e-4, (dist - 3 * R * RING_EXTENT) * 0.5);
+  h.camera.far = dist + 4 * R * RING_EXTENT + (twin ? 2 * COMPARE_OFFSET_R * R : 0);
+  h.camera.updateProjectionMatrix();
   bodyOrientation(body, f.simDays, q);
   spinQ.setFromAxisAngle(yAxis, THREE.MathUtils.degToRad(ctl.spin));
   q.multiply(spinQ);
@@ -172,8 +188,8 @@ h.onFrame((f) => {
   camAxis.copy(h.cameraWorldPosition).normalize();
   const az = THREE.MathUtils.degToRad(ctl.sunAz);
   const el = THREE.MathUtils.degToRad(ctl.sunEl);
-  const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), camAxis).normalize();
-  const up = new THREE.Vector3().crossVectors(camAxis, right).normalize();
+  right.crossVectors(worldUp, camAxis).normalize();
+  up.crossVectors(camAxis, right).normalize();
   sunDir
     .copy(camAxis)
     .multiplyScalar(Math.cos(az) * Math.cos(el))
@@ -197,6 +213,7 @@ h.onFrame((f) => {
     scratch.set(COMPARE_OFFSET_R * R, 0, 0);
     h.relative(scratch, rel);
     visual.update(f, u);
+    applyShellVisibility();
     scratch.set(-COMPARE_OFFSET_R * R, 0, 0);
     h.relative(scratch, twinUniforms.positionKm);
     twinUniforms.sunIntensity = u.sunIntensity;
@@ -205,6 +222,7 @@ h.onFrame((f) => {
     twin.update(f, twinUniforms);
   } else {
     visual.update(f, u);
+    applyShellVisibility();
   }
 });
 

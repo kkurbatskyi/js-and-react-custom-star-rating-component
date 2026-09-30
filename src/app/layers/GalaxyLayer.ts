@@ -3,6 +3,7 @@
  * the Milky-Way-like sky from inside the disk. Always active: it is the sky.
  */
 import { type PerspectiveCamera, Scene, Vector3 } from 'three';
+import { smoothstep } from '../../core/math';
 import type { FrameInfo, LabelSpec, Layer, LayerRenderSpec } from '../../engine/contracts';
 import { LabelTier } from '../../engine/contracts';
 import type {
@@ -24,6 +25,8 @@ import {
 
 /** Galaxy particles closer than this fade out; the starfield resolves individual stars there. */
 const NEAR_FADE_LY = 1200;
+/** Exposure eases towards its target at this rate, 1/s (≈95 % in one second, in log space). */
+const EXPOSURE_LAMBDA = 3;
 /** Galaxy-scale labels (core, home) only from at least this far away, ly. */
 const FEATURE_LABEL_MIN_LY = 4000;
 
@@ -47,6 +50,9 @@ export class GalaxyLayer implements Layer {
   private readonly scratch = new Vector3();
   private readonly screen: ScreenPoint = { x: 0, y: 0, depth: 0 };
   private camera: PerspectiveCamera | null = null;
+  /** ln(scene exposure), eased; NaN until the first frame (snaps). */
+  private logExposure = Number.NaN;
+  private cutSerial = -1;
   private level: FrameInfo['level'] = 'galaxy';
   private width = 1;
   private height = 1;
@@ -72,6 +78,7 @@ export class GalaxyLayer implements Layer {
     camera.updateProjectionMatrix();
 
     this.visual.update(syncVisualFrame(this.vframe, frame, camera), this.options);
+    this.updateExposure(frame);
 
     this.camera = camera;
     this.level = frame.level;
@@ -142,6 +149,30 @@ export class GalaxyLayer implements Layer {
     else spec.ref = undefined;
     out.push(spec);
     return slot + 1;
+  }
+
+  /**
+   * Scene exposure: the galaxy suggests one per vantage point (≈2 inside the disk, ≈0.45 a few kly
+   * above it), but star and planet visuals are calibrated for 1 — so inside a system the target
+   * blends (geometrically) to 1 over the outer 15 % of its radius (the composed system view sits at
+   * 0.8 R, fully calibrated). Eased in log space (~1 s, so boundary crossings in flight never
+   * flicker); snapped on camera cuts and while the clock is frozen.
+   */
+  private updateExposure(frame: FrameInfo): void {
+    const engine = this.ctx.engine;
+    const hint = this.visual.exposureHint?.(this.options.cameraLy) ?? 1;
+    const sys = engine.systemHandle;
+    const systemKm = frame.cam.systemKm;
+    const r = sys?.system?.radiusKm ?? 0;
+    const inSystem = r > 0 && systemKm ? smoothstep(r, 0.85 * r, systemKm.length()) : 0;
+    const target = Math.log(Math.max(hint, 1e-3)) * (1 - inSystem);
+    const cut = engine.rig.cutSerial !== this.cutSerial;
+    this.cutSerial = engine.rig.cutSerial;
+    if (Number.isNaN(this.logExposure) || cut || frame.dtSec <= 0) this.logExposure = target;
+    else
+      this.logExposure +=
+        (target - this.logExposure) * (1 - Math.exp(-EXPOSURE_LAMBDA * frame.dtSec));
+    engine.exposure = Math.exp(this.logExposure);
   }
 
   setQuality(q: Quality): void {

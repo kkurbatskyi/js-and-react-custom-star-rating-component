@@ -47,6 +47,8 @@ export class FocusHandle implements GalacticPoint {
   readonly maxDistanceKm: number;
   /** Radius of the planet-level zone (0 unless a planet or moon). */
   readonly planetZoneKm: number;
+  /** Visible radius of the galaxy disk, km (framing of galaxy points; 0 when unknown). */
+  readonly galaxyRadiusKm: number;
   readonly starLy = new Vector3();
   readonly frame = new Quaternion();
   readonly posS = new Vector3();
@@ -62,6 +64,7 @@ export class FocusHandle implements GalacticPoint {
       system: StarSystem | null;
       planet: Planet | null;
       moon: Moon | null;
+      galaxyRadiusLy?: number;
     },
   ) {
     this.cachedTarget = target;
@@ -72,6 +75,7 @@ export class FocusHandle implements GalacticPoint {
       posS: new Vector3(),
     };
     this.kind = target.kind;
+    this.galaxyRadiusKm = (parts.galaxyRadiusLy ?? 0) * KM_PER_LY;
     this.star = parts.star;
     this.system = parts.system;
     this.planet = parts.planet;
@@ -168,7 +172,13 @@ export function resolveFocus(universe: Universe, target: FocusTarget): FocusHand
     case 'galaxy': {
       const c = target.centerLy;
       if (!c.every(Number.isFinite)) return null;
-      return new FocusHandle(target, { star: null, system: null, planet: null, moon: null });
+      return new FocusHandle(target, {
+        star: null,
+        system: null,
+        planet: null,
+        moon: null,
+        galaxyRadiusLy: universe.galaxy.params.radiusLy,
+      });
     }
     case 'star': {
       const star = universe.getRecord(target.id);

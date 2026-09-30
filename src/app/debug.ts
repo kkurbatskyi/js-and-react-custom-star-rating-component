@@ -83,6 +83,7 @@ export function installDebugHandle(engine: Engine, sync: StoreSync): SiderealHan
         dir.normalize(),
         { yaw: 0, pitch: 0, distanceKm: 1 },
         engine.rig.viewAspect,
+        engine.rig.fovY,
       );
       engine.rig.jumpTo(handle, engine.clock.simDays, {
         yaw: pose?.yaw ?? p.yaw,

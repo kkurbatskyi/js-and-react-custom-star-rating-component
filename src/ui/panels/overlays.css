@@ -239,6 +239,10 @@
 }
 @container sd (max-width: 720px) {
   .sd-note {
+    z-index: calc(
+      var(--sd-z-sheet) +
+      1
+    ); /* above a half-open sheet: its button must stay reachable */
     left: var(--sd-inset);
     right: var(--sd-inset);
     bottom: auto;

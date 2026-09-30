@@ -47,6 +47,8 @@ export interface StarLook {
   coronaFall: number;
   /** Wide smooth glow relative to `brightness`. */
   haloGain: number;
+  /** Radiance of the thin luminous rim hugging the limb (HDR). */
+  rimGlow: number;
   streamers: number;
   chromosphere: number;
   prominences: number;
@@ -70,7 +72,7 @@ export function starLook(star: StarDetails): StarLook {
 
   // Hot photospheres are brighter per unit area (sigma T^4), but the HDR budget tops out ~40.
   const brightness = clamp(14 * (tempK / 5772), 6, 40);
-  const closeBrightness = clamp(0.6 * (tempK / 5772) ** 0.5, 0.35, 1.0);
+  const closeBrightness = clamp(0.42 * (tempK / 5772) ** 0.5, 0.25, 1.0);
   const hotColor = saturateRGB(blackbodyRGB(Math.min(tempK, 6500) * 0.72), 1.15);
 
   const base: StarLook = {
@@ -89,6 +91,7 @@ export function starLook(star: StarDetails): StarLook {
     coronaGain: 0.09,
     coronaFall: 4.4,
     haloGain: 0.03,
+    rimGlow: 0.9,
     streamers: 0.7,
     chromosphere: 0.8,
     prominences: 0,
@@ -121,6 +124,7 @@ export function starLook(star: StarDetails): StarLook {
         coronaExtent: 4,
         coronaGain: 0.0,
         haloGain: 0.05,
+        rimGlow: 1.3,
         chromosphere: 0,
         streamers: 0,
       };
@@ -138,8 +142,9 @@ export function starLook(star: StarDetails): StarLook {
         limbSoft: super_ ? 0.4 : sub ? 0.05 : 0.25,
         coronaExtent: super_ ? 4.5 : 5,
         coronaGain: sub ? 0.16 : 0.06,
-        coronaFall: 2.4,
-        haloGain: super_ ? 0.16 : sub ? 0.05 : 0.12,
+        coronaFall: 3.2,
+        haloGain: super_ ? 0.11 : sub ? 0.04 : 0.09,
+        rimGlow: 0.55,
         streamers: 0.3,
         chromosphere: sub ? 0.5 : 0,
         prominences: sub ? activity * 0.5 : 0,
@@ -157,8 +162,9 @@ export function starLook(star: StarDetails): StarLook {
         ...base,
         coronaExtent: 4.5,
         coronaGain: 0.05,
-        coronaFall: 2.2,
+        coronaFall: 3.4,
         haloGain: 0.06,
+        rimGlow: 1.5,
         streamers: 0,
         chromosphere: 0,
       };
@@ -169,7 +175,7 @@ export function starLook(star: StarDetails): StarLook {
         granuleScale: 18,
         coronaExtent: 4.5,
         coronaGain: 0.08,
-        coronaFall: 2.6,
+        coronaFall: 3.6,
         haloGain: 0.05,
         streamers: 0.2,
         chromosphere: 0,

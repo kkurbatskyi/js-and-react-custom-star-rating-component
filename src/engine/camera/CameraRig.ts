@@ -218,7 +218,7 @@ export class CameraRig {
     this.touch();
     this.hasZoomAnchor = false;
     const start = this.captureStart(to);
-    arrivalPose(to, _v.copy(start.dir), _arrival, this.viewAspect);
+    arrivalPose(to, _v.copy(start.dir), _arrival, this.viewAspect, this.fovY);
     if (reducedMotion) {
       this.cancelMotion();
       this.fadeJump = { from: this.focus, to, pose: { ..._arrival }, elapsed: 0, jumped: false };
@@ -246,7 +246,7 @@ export class CameraRig {
     if (!pose) {
       relativeKm(this.anchorHandle, to, _v).add(this.offsetKm);
       if (_v.lengthSq() === 0) _v.set(0, 0, 1);
-      arrivalPose(to, _v.normalize(), _arrival, this.viewAspect);
+      arrivalPose(to, _v.normalize(), _arrival, this.viewAspect, this.fovY);
     }
     this.cancelMotion();
     this.focus = to;
