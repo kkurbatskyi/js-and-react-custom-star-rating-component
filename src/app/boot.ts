@@ -1,194 +1,230 @@
 /**
- * boot — TEMPORARY composition root (integration phase). The engine specialist replaces this with
- * the real engine (layer stack, camera rig, flights, input, picking, labels); `boot(canvas)` stays
- * the entry point called by src/main.tsx.
- *
- * What it does now: renders the GalaxyVisual stub through the shared HDR PostFX pipeline with a
- * slowly orbiting, camera-relative camera; runs the simulation clock; answers the store's
- * navRequest/timeRequest by jumping (no flights yet); writes throttled engine state (≤ 10 Hz);
- * exposes `window.__SIDEREAL__ = { store, universe }` and sets `window.__READY__` after the first
- * frames (scripts/shot.mjs waits for it).
+ * boot — the composition root. Builds the engine, the four layers (galaxy ▸ starfield ▸ system ▸
+ * planet), input, labels, audio, FX, store sync, deep links and the debug handle; reports charming
+ * progress into `store.boot`; pre-warms shader programs; shows the galaxy overview (or the deep-linked
+ * object) and flags `store.ready` / `window.__READY__` once real frames are on screen.
  */
-import { RenderPass } from 'postprocessing';
-import { PerspectiveCamera, Scene, Vector3, WebGLRenderer } from 'three';
-import type { FocusTarget, ViewLevel } from '../core/types';
-import { KM_PER_LY } from '../core/units';
-import type { Quality, VisualFrame } from '../render/contracts';
-import { GalaxyVisual } from '../render/galaxy/GalaxyVisual';
-import { PostFX } from '../render/post/PostFX';
-import { advanceSimDays } from '../sim/time';
-import type { QualitySetting } from '../state/contracts';
+import { formatCount } from '../core/format';
+import { log } from '../core/log';
+import { Engine } from '../engine/Engine';
+import type { LabelSpec } from '../engine/contracts';
+import { InputController } from '../engine/input/InputController';
+import { LabelOverlay } from '../engine/labels/LabelOverlay';
+import { registerEngineCommands } from '../state/bridge';
 import { store } from '../state/store';
 import { getUniverse } from '../universe';
-import type { Universe } from '../universe/contracts';
+import { AudioBridge } from './AudioBridge';
+import { installDebugHandle } from './debug';
+import { parseDeepLink } from './deepLink';
+import { FxBridge } from './fx';
+import { createInputActions } from './interaction';
+import type { LayerContext } from './layers/context';
+import { FullVisualCache } from './layers/FullVisualCache';
+import { GalaxyLayer } from './layers/GalaxyLayer';
+import { PlanetLayer } from './layers/PlanetLayer';
+import { StarfieldLayer } from './layers/StarfieldLayer';
+import { SystemAssetCache } from './layers/SystemAssets';
+import { SystemLayer } from './layers/SystemLayer';
+import { StoreSync } from './StoreSync';
+import { warmUpShaders } from './warmup';
 
 export interface BootHandle {
   dispose(): void;
 }
 
-interface DebugWindow {
-  __SIDEREAL__?: { store: typeof store; universe: Universe };
-  __READY__?: boolean;
-}
-
-/** Rendering-scale caps per quality (ARCHITECTURE §8). */
-const DPR_CAP: Readonly<Record<Quality, number>> = { low: 0.75, medium: 1, high: 1.5, ultra: 2 };
-/** Store writes are throttled to this interval. */
-const STORE_INTERVAL_MS = 100;
-/** Frames rendered before `__READY__` / `ready`. */
+const bootLog = log.child('boot');
+/** Rendered frames before `ready`: shaders compiled, first images on screen. */
 const READY_AFTER_FRAMES = 3;
 
-function resolveQuality(q: QualitySetting): Quality {
-  if (q !== 'auto') return q;
-  const coarse =
-    typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
-  return coarse ? 'low' : 'medium';
-}
+const nextFrame = (): Promise<void> =>
+  new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => resolve());
+    else setTimeout(resolve, 16);
+  });
 
-function levelFor(target: FocusTarget): ViewLevel {
-  return target.kind === 'galaxy' ? 'galaxy' : target.kind === 'star' ? 'system' : 'planet';
+function progress(value: number, message: string): void {
+  store.getState().setFromEngine({ boot: { progress: value, message } });
 }
 
 export function boot(canvas: HTMLCanvasElement): BootHandle {
-  const debug = window as Window & DebugWindow;
-  const initial = store.getState();
-  const universe = getUniverse(initial.settings.galaxySeed);
-  debug.__SIDEREAL__ = { store, universe };
-
-  let renderer: WebGLRenderer;
-  try {
-    renderer = new WebGLRenderer({
-      canvas,
-      antialias: false,
-      depth: true,
-      stencil: false,
-      powerPreference: 'high-performance',
-    });
-  } catch {
-    initial.setFromEngine({ boot: { progress: 0, message: 'This device cannot run WebGL 2.' } });
-    return { dispose() {} };
-  }
-
-  const quality = resolveQuality(initial.settings.quality);
-  const scene = new Scene();
-  const camera = new PerspectiveCamera(50, 1, 10, 1e6); // light-years; camera stays at the origin
-  const scenePass = new RenderPass(scene, camera);
-  const post = new PostFX(renderer, {
-    quality,
-    scenePass,
-    bloom: { intensity: 0.9 * initial.settings.bloom, threshold: 1, radius: 0.75 },
+  const disposers: (() => void)[] = [];
+  let disposed = false;
+  void start(canvas, disposers, () => disposed).catch((err: unknown) => {
+    bootLog.error('boot failed', err);
+    progress(0, 'Something went wrong while charting the galaxy. Try reloading.');
   });
-  const galaxy = new GalaxyVisual(universe.galaxy, quality);
-  scene.add(galaxy.object);
-
-  const frame: VisualFrame = {
-    renderer,
-    timeSec: 0,
-    dtSec: 0,
-    simDays: initial.simDays,
-    camera,
-    width: 1,
-    height: 1,
-    pixelRatio: 1,
-    quality,
-  };
-
-  function resize(): void {
-    const width = Math.max(1, canvas.clientWidth || window.innerWidth);
-    const height = Math.max(1, canvas.clientHeight || window.innerHeight);
-    const pixelRatio = Math.min(window.devicePixelRatio || 1, DPR_CAP[quality]);
-    renderer.setPixelRatio(pixelRatio);
-    renderer.setSize(width, height, false);
-    post.setSize(width, height);
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-    frame.width = width;
-    frame.height = height;
-    frame.pixelRatio = pixelRatio;
-  }
-  resize();
-  window.addEventListener('resize', resize);
-
-  // A slow orbit around the galactic centre, 35° above the disk.
-  const params = universe.galaxy.params;
-  const orbitRadiusLy = params.radiusLy * 1.6;
-  const elevation = 0.62;
-  let azimuth = 0.9;
-  const cameraLy = new Vector3();
-  const galaxyOptions = { cameraLy, nearFadeLy: 2500, intensity: 1 };
-
-  let simDays = initial.simDays;
-  let frames = 0;
-  let lastStoreWrite = Number.NEGATIVE_INFINITY;
-  const start = performance.now();
-  let last = start;
-  let raf = 0;
-
-  function tick(now: number): void {
-    raf = requestAnimationFrame(tick);
-    const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
-    last = now;
-    const s = store.getState();
-
-    // UI → engine requests. No flights yet: acknowledge by jumping.
-    if (s.navRequest) {
-      const { target, seq } = s.navRequest;
-      s.consumeNavRequest(seq);
-      s.setFromEngine({
-        focus: target,
-        level: levelFor(target),
-        flightTarget: null,
-        flightProgress: null,
-      });
-    }
-    if (s.timeRequest) {
-      simDays = s.timeRequest.simDays;
-      s.consumeTimeRequest(s.timeRequest.seq);
-    }
-    if (!s.paused) simDays = advanceSimDays(simDays, dt, s.timeScale);
-
-    const spin = s.settings.autoRotate ? (s.settings.reducedMotion ? 0.004 : 0.02) : 0; // rad/s
-    azimuth += spin * dt;
-    cameraLy.set(
-      orbitRadiusLy * Math.cos(elevation) * Math.cos(azimuth),
-      orbitRadiusLy * Math.sin(elevation),
-      orbitRadiusLy * Math.cos(elevation) * Math.sin(azimuth),
-    );
-    // Camera-relative rendering: the camera stays at the origin and looks at the centre's offset.
-    camera.position.set(0, 0, 0);
-    camera.lookAt(-cameraLy.x, -cameraLy.y, -cameraLy.z);
-
-    frame.timeSec = (now - start) / 1000;
-    frame.dtSec = dt;
-    frame.simDays = simDays;
-    galaxy.update(frame, galaxyOptions);
-    post.render(dt);
-    frames++;
-
-    if (now - lastStoreWrite >= STORE_INTERVAL_MS) {
-      lastStoreWrite = now;
-      s.setFromEngine({
-        simDays,
-        cameraLy: [cameraLy.x, cameraLy.y, cameraLy.z],
-        cameraDistanceKm: orbitRadiusLy * KM_PER_LY,
-      });
-    }
-    if (frames === READY_AFTER_FRAMES) {
-      s.setFromEngine({ ready: true, boot: { progress: 1, message: 'Ready' } });
-      debug.__READY__ = true;
-    }
-  }
-  raf = requestAnimationFrame(tick);
-
   return {
     dispose() {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', resize);
-      scene.remove(galaxy.object);
-      galaxy.dispose();
-      post.dispose();
-      scenePass.dispose();
-      renderer.dispose();
+      disposed = true;
+      for (let i = disposers.length - 1; i >= 0; i--) disposers[i]();
+      disposers.length = 0;
     },
   };
+}
+
+async function start(
+  canvas: HTMLCanvasElement,
+  disposers: (() => void)[],
+  isDisposed: () => boolean,
+): Promise<void> {
+  const initial = store.getState();
+  let universe = getUniverse(initial.settings.galaxySeed);
+  const stars = formatCount(universe.galaxy.params.estimatedStarCount);
+  progress(0.05, `Seeding ${stars} stars…`);
+  await nextFrame();
+
+  let engine: Engine;
+  try {
+    engine = new Engine(canvas, {
+      universe,
+      quality: initial.settings.quality,
+      simDays: initial.simDays,
+      timeScale: initial.timeScale,
+      bloom: initial.settings.bloom,
+    });
+  } catch (err) {
+    bootLog.error('WebGL unavailable', err);
+    progress(0, 'This device cannot run WebGL 2 — Sidereal needs it to draw the sky.');
+    return;
+  }
+  disposers.push(() => engine.dispose());
+  if (isDisposed()) return;
+
+  progress(0.25, 'Igniting the galactic core…');
+  await nextFrame();
+  const quality = engine.quality;
+  const assets = new SystemAssetCache(quality);
+  const fullVisuals = new FullVisualCache(quality);
+  disposers.push(() => {
+    assets.clear();
+    fullVisuals.clear();
+  });
+  let sync: StoreSync | null = null;
+  let labelsOn = initial.settings.labels;
+  const ctx: LayerContext = {
+    engine,
+    assets,
+    fullVisuals,
+    universe: () => universe,
+    selectedId: () => store.getState().selection?.id ?? null,
+    hoveredId: () => store.getState().hover?.id ?? null,
+    orbitOpacity: () => sync?.orbitOpacity ?? 1,
+    labelsEnabled: () => labelsOn,
+  };
+  const layers = [
+    new GalaxyLayer(ctx, quality),
+    new StarfieldLayer(ctx, quality),
+    new SystemLayer(ctx, quality),
+    new PlanetLayer(ctx, quality),
+  ];
+  engine.setLayers(layers);
+  disposers.push(() => {
+    for (const l of layers) l.dispose();
+  });
+
+  progress(0.55, 'Calibrating the star-rating instrument…');
+  await nextFrame();
+  await warmUpShaders(engine, ctx, universe);
+  if (isDisposed()) return;
+
+  progress(0.8, 'Plotting a course…');
+  const audio = new AudioBridge();
+  disposers.push(() => audio.dispose());
+  sync = new StoreSync(engine, {
+    onUniverseChange(next) {
+      universe = next;
+      assets.clear();
+      fullVisuals.clear();
+    },
+    onFlightStart() {
+      audio.sfx('travel-start');
+    },
+    onArrive() {
+      audio.sfx('arrive');
+    },
+  });
+  const storeSync = sync;
+  engine.hooks.push(storeSync);
+  disposers.push(() => storeSync.dispose());
+
+  const fx = new FxBridge(engine.post);
+  disposers.push(() => fx.dispose());
+
+  const input = new InputController(canvas, createInputActions(engine, canvas, audio));
+  disposers.push(() => input.dispose());
+
+  const overlay = new LabelOverlay(document.body, {
+    select(ref) {
+      store.getState().select(ref);
+      audio.sfx('select');
+    },
+    fly(ref) {
+      store.getState().select(ref);
+      store.getState().requestFocus(ref, 'fly');
+    },
+  });
+  disposers.push(() => overlay.dispose());
+  const labelBuffer: LabelSpec[] = [];
+
+  engine.hooks.push({
+    beforeUpdate(_e, dt) {
+      input.update(dt || 1 / 60);
+    },
+    beforeRender(frame) {
+      fx.update(frame);
+    },
+    afterRender(frame) {
+      const s = store.getState();
+      labelsOn = s.settings.labels;
+      const showLabels = labelsOn && !s.ui.photoMode;
+      overlay.setVisible(showLabels);
+      if (showLabels) {
+        const n = engine.collectLabels(labelBuffer);
+        overlay.update(labelBuffer, n, frame.width, frame.height, frame.dtSec);
+      }
+      audio.setTravel(frame.travel);
+      audio.setScene(frame.level, engine.rig.focus, s.settings.galaxySeed);
+    },
+  });
+
+  disposers.push(
+    registerEngineCommands({
+      zoomBy(factor) {
+        engine.rig.zoom(factor);
+      },
+      resetView() {
+        engine.rig.resetView(store.getState().settings.reducedMotion, engine.clock.simDays);
+      },
+      capture() {
+        return new Promise((resolve) => {
+          try {
+            engine.renderNow(); // same task as toBlob: the drawing buffer is still intact
+            canvas.toBlob((blob) => resolve(blob), 'image/png');
+          } catch {
+            resolve(null);
+          }
+        });
+      },
+    }),
+  );
+
+  installDebugHandle(engine, storeSync);
+  disposers.push(() => {
+    delete window.__SIDEREAL__;
+  });
+
+  // Deep link: jump straight to the linked object (switching galaxies first if the token says so).
+  const link = parseDeepLink(window.location.hash);
+  if (link) {
+    const s = store.getState();
+    if (link.seed !== null && link.seed !== s.settings.galaxySeed) s.updateSettings({ galaxySeed: link.seed });
+    store.getState().requestFocus(link.target, 'jump');
+  }
+
+  engine.start();
+  for (let i = 0; i < READY_AFTER_FRAMES; i++) await nextFrame();
+  if (isDisposed()) return;
+  storeSync.write();
+  store.getState().setFromEngine({ ready: true, boot: { progress: 1, message: 'Ready' } });
+  window.__READY__ = true;
 }

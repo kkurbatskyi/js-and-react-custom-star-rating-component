@@ -1,0 +1,379 @@
+/* HUD instruments: time, scale, coordinates, minimap, camera buttons, tooltip, toasts, FPS. */
+
+/* ── time controls ─────────────────────────────────────────────────────────────────────── */
+.sd-time {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px 4px 4px;
+  width: max-content;
+  max-width: 100%;
+}
+.sd-time__play {
+  color: var(--sd-accent);
+}
+.sd-time__step {
+  display: flex;
+  align-items: center;
+}
+.sd-time__speed {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-width: 78px;
+}
+.sd-time__scale {
+  font-size: var(--sd-fs-sm);
+  line-height: 1;
+  color: var(--sd-text);
+  white-space: nowrap;
+}
+.sd-time__notches {
+  display: flex;
+  gap: 3px;
+}
+.sd-time__notches i {
+  width: 6px;
+  height: 2px;
+  background: var(--sd-line-strong);
+  transition: background-color var(--sd-dur-2) var(--sd-ease);
+}
+.sd-time__notches i.is-on {
+  background: var(--sd-accent);
+  box-shadow: 0 0 6px var(--sd-accent-glow);
+}
+.sd-time__date {
+  display: grid;
+  gap: 1px;
+  margin: 0 var(--sd-s-2);
+  padding: 0 var(--sd-s-3);
+  border-inline: 1px solid var(--sd-line);
+  font-size: var(--sd-fs-sm);
+  line-height: 1.25;
+  color: var(--sd-text);
+  white-space: nowrap;
+}
+.sd-time__clock {
+  font-size: var(--sd-fs-xs);
+  color: var(--sd-text-dim);
+}
+.sd-time__now {
+  width: auto;
+  gap: 6px;
+  padding: 0 10px 0 8px;
+}
+.sd-time__now-text {
+  font: 500 var(--sd-fs-2xs) / 1 var(--sd-font-ui);
+  letter-spacing: var(--sd-track-caps);
+  text-transform: uppercase;
+}
+
+/* ── scale ruler + coordinates (bare text over the view) ───────────────────────────────── */
+.sd-scale {
+  display: grid;
+  gap: 4px;
+  width: max-content;
+  color: var(--sd-text);
+  filter: drop-shadow(0 0 3px rgb(3 5 10 / 0.95)) drop-shadow(0 0 8px rgb(3 5 10 / 0.7));
+}
+.sd-scale__label {
+  font-size: var(--sd-fs-sm);
+  letter-spacing: 0.04em;
+}
+.sd-scale svg {
+  display: block;
+  overflow: visible;
+}
+
+.sd-coords {
+  margin: 0;
+  display: grid;
+  gap: 2px;
+  min-width: 132px;
+  font-size: var(--sd-fs-xs);
+  line-height: 1.3;
+  text-shadow: var(--sd-text-shadow);
+}
+.sd-coords > div {
+  display: grid;
+  grid-template-columns: 3.2em 1fr;
+  gap: var(--sd-s-2);
+}
+.sd-coords dt {
+  color: var(--sd-text-faint);
+  letter-spacing: 0.08em;
+}
+.sd-coords dd {
+  margin: 0;
+  text-align: right;
+  color: var(--sd-text);
+}
+.sd-coords__head {
+  margin-bottom: 3px;
+  color: var(--sd-text-faint);
+  text-shadow: var(--sd-text-shadow);
+}
+.sd-coords__range {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--sd-line);
+}
+
+/* ── minimap ───────────────────────────────────────────────────────────────────────────── */
+.sd-minimap {
+  --sd-map: 168px;
+  width: calc(var(--sd-map) + 10px);
+  padding: 5px;
+  display: grid;
+  gap: 5px;
+}
+.sd-minimap__map {
+  position: relative;
+  width: var(--sd-map);
+  height: var(--sd-map);
+  overflow: hidden;
+  background: var(--sd-ink);
+  border-radius: var(--sd-r-1);
+  cursor: crosshair;
+  touch-action: manipulation;
+}
+.sd-minimap__canvas,
+.sd-minimap__overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.sd-minimap__ring {
+  fill: none;
+  stroke: rgb(236 230 216 / 0.14);
+  stroke-width: 0.6;
+  stroke-dasharray: 1.4 2.6;
+}
+.sd-minimap__axis {
+  fill: none;
+  stroke: rgb(236 230 216 / 0.1);
+  stroke-width: 0.6;
+}
+.sd-minimap__home {
+  fill: none;
+  stroke: var(--sd-accent);
+  stroke-width: 1;
+}
+.sd-minimap__focus {
+  fill: none;
+  stroke: var(--sd-accent-2);
+  stroke-width: 1;
+}
+.sd-minimap__course {
+  fill: none;
+  stroke: var(--sd-accent);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  opacity: 0.85;
+}
+.sd-minimap__dest {
+  fill: var(--sd-accent);
+}
+.sd-minimap__cursor {
+  fill: none;
+  stroke: var(--sd-accent-2);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+.sd-minimap__halo {
+  fill: rgb(220 181 111 / 0.16);
+  stroke: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sd-ping 2.6s var(--sd-ease) infinite;
+}
+@keyframes sd-ping {
+  from {
+    transform: scale(0.5);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+.sd-minimap__you {
+  fill: none;
+  stroke: var(--sd-accent-strong);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+}
+.sd-minimap__dot {
+  fill: var(--sd-accent-strong);
+}
+.sd-minimap__caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sd-s-2);
+  height: 16px;
+  padding: 0 3px;
+  font-size: var(--sd-fs-2xs);
+  letter-spacing: 0.06em;
+  color: var(--sd-text-dim);
+  white-space: nowrap;
+}
+.sd-minimap__key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.sd-minimap__key i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+}
+.sd-minimap__key-home {
+  border: 1px solid var(--sd-accent);
+  transform: rotate(45deg) scale(0.85);
+}
+.sd-minimap__key-you {
+  border-radius: 50%;
+  background: var(--sd-accent-strong);
+  box-shadow: 0 0 6px var(--sd-accent-glow);
+}
+
+/* ── camera buttons ────────────────────────────────────────────────────────────────────── */
+.sd-viewctl {
+  display: grid;
+  gap: 2px;
+  padding: 3px;
+}
+.sd-viewctl__sep {
+  height: 1px;
+  margin: 2px 6px;
+  background: var(--sd-line);
+}
+
+/* ── hover tooltip ─────────────────────────────────────────────────────────────────────── */
+.sd-tip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: var(--sd-z-tooltip);
+  display: grid;
+  gap: 2px;
+  max-width: 260px;
+  padding: 8px 12px 9px;
+  pointer-events: none;
+  background: var(--sd-panel-dense);
+  border: 1px solid var(--sd-line-strong);
+  border-radius: var(--sd-r-2);
+  box-shadow: var(--sd-shadow-panel);
+  will-change: transform;
+}
+.sd-tip__name {
+  font: 500 18px / 1.1 var(--sd-font-display);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sd-tip__sub {
+  font-size: var(--sd-fs-xs);
+  color: var(--sd-text-dim);
+}
+.sd-tip .sd-stars {
+  margin-top: 3px;
+}
+
+/* ── toasts ────────────────────────────────────────────────────────────────────────────── */
+.sd-toasts {
+  position: absolute;
+  z-index: var(--sd-z-toast);
+  top: calc(var(--sd-topbar-h) + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, calc(100% - 2 * var(--sd-inset)));
+  display: grid;
+  gap: var(--sd-s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+}
+.sd-toast {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: var(--sd-s-3);
+  padding: 10px 4px 10px 12px;
+  border-left: 2px solid var(--sd-accent-2);
+  background: var(--sd-panel-dense);
+  animation: sd-toast-in var(--sd-dur-3) var(--sd-ease) both;
+}
+@keyframes sd-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.sd-toast--success {
+  border-left-color: var(--sd-success);
+}
+.sd-toast--warning {
+  border-left-color: var(--sd-danger);
+}
+.sd-toast__mark {
+  display: grid;
+  place-items: center;
+  height: 20px;
+  color: var(--sd-accent-2);
+}
+.sd-toast--success .sd-toast__mark {
+  color: var(--sd-success);
+}
+.sd-toast--warning .sd-toast__mark {
+  color: var(--sd-danger);
+}
+.sd-toast__body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 1px;
+}
+.sd-toast__text {
+  font-size: var(--sd-fs-md);
+  font-weight: 500;
+}
+.sd-toast__sub {
+  font-size: var(--sd-fs-sm);
+  color: var(--sd-text-dim);
+  overflow-wrap: anywhere;
+}
+.sd-toast__close {
+  --sd-hit: 30px;
+}
+
+/* ── FPS ───────────────────────────────────────────────────────────────────────────────── */
+.sd-fps {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 8px;
+  font-size: var(--sd-fs-xs);
+  color: var(--sd-text-dim);
+  background: rgb(8 11 19 / 0.6);
+  border: 1px solid var(--sd-line);
+  border-radius: var(--sd-r-1);
+}
+.sd-fps span:first-child {
+  color: var(--sd-text);
+  min-width: 2ch;
+  text-align: right;
+}
+.sd-fps__ms {
+  margin-left: 6px;
+  color: var(--sd-text-faint);
+}

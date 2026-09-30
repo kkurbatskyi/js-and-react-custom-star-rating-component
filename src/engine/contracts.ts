@@ -4,7 +4,7 @@
  */
 import type * as THREE from 'three';
 import type { FocusTarget, SelectionRef, StarId, ViewLevel } from '../core/types';
-import type { ScreenDisc, VisualFrame } from '../render/contracts';
+import type { Quality, ScreenDisc, VisualFrame } from '../render/contracts';
 
 /** Camera state for one frame, expressed in every frame of reference a layer might need. */
 export interface CameraSnapshot {
@@ -44,6 +44,11 @@ export interface FrameInfo extends Omit<VisualFrame, 'camera'> {
    * for lens flares and god-rays. Null outside systems.
    */
   sun: { x: number; y: number; visibility: number } | null;
+  /**
+   * Unit direction of the camera's motion in VIEW space (x right, y up, −z forward) while travelling;
+   * zero vector when still. For the travel FX (streak direction) and audio panning.
+   */
+  travelDirection?: THREE.Vector3;
 }
 
 /**
@@ -74,12 +79,20 @@ export interface Layer {
   occluders?(out: ScreenDisc[]): void;
   pick?(x: number, y: number, maxDistPx: number): PickHit | null;
   labels?(out: LabelSpec[]): void;
+  /** Rebuild quality-dependent resources (particle counts, bake sizes). */
+  setQuality?(q: Quality): void;
   dispose(): void;
 }
 
 export interface PickHit {
   ref: SelectionRef;
   distPx: number;
+  /**
+   * Screen position (CSS px) of the picked object, when known. Lets the engine discard hits that lie
+   * behind a nearer layer's occluder disc; without it the pointer position is tested instead.
+   */
+  x?: number;
+  y?: number;
 }
 
 /** Shared label priority scale: priority = tier * 1000 + rank-within-tier (0..999). */

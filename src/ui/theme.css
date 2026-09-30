@@ -1,0 +1,498 @@
+/*
+ * Sidereal — design tokens and base primitives.
+ *
+ * "A classical star atlas meets an observatory instrument panel": ink-glass panels over the 3D
+ * view, hairline rules, fine tick marks, catalogue numbers, small caps. One deliberately dark theme.
+ *
+ * The tokens live on :root because the engine's DOM label overlay uses them too. Everything else
+ * is scoped to `.sd-root` (the overlay) so nothing leaks into the canvas host page.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* ── colour: ink, starlight, stellar gold, Rayleigh blue ─────────────────────────────── */
+  --sd-ink: #03050a;
+  --sd-ink-raised: #0b0f19;
+  --sd-panel: rgb(8 11 19 / 0.68);
+  --sd-panel-dense: rgb(8 11 19 / 0.86);
+  --sd-panel-solid: #0a0e17;
+  --sd-hover: rgb(236 230 216 / 0.06);
+  --sd-line: rgb(236 230 216 / 0.14);
+  --sd-line-strong: rgb(236 230 216 / 0.3);
+  --sd-text: #ece6d8; /* warm starlight white */
+  --sd-text-dim: rgb(236 230 216 / 0.7);
+  --sd-text-faint: rgb(236 230 216 / 0.46);
+  --sd-accent: #dcb56f; /* stellar gold — ratings and primary actions */
+  --sd-accent-strong: #f2cf8b;
+  --sd-accent-dim: rgb(220 181 111 / 0.42);
+  --sd-accent-wash: rgb(220 181 111 / 0.1);
+  --sd-accent-glow: rgb(220 181 111 / 0.55);
+  --sd-on-accent: #1a1204;
+  --sd-accent-2: #8db6f2; /* Rayleigh blue — focus and interactive state */
+  --sd-accent-2-dim: rgb(141 182 242 / 0.4);
+  --sd-accent-2-wash: rgb(141 182 242 / 0.12);
+  --sd-danger: #ec7b66;
+  --sd-success: #93cba6;
+  --sd-focus: var(--sd-accent-2);
+
+  /* atmosphere-composition series (muted, sequential blue → sand) */
+  --sd-gas-1: #8db6f2;
+  --sd-gas-2: #7fc8c4;
+  --sd-gas-3: #dcb56f;
+  --sd-gas-4: #c98f7c;
+  --sd-gas-5: #a99cd0;
+  --sd-gas-6: rgb(236 230 216 / 0.4);
+
+  /* ── type ──────────────────────────────────────────────────────────────────────────── */
+  --sd-font-display:
+    'Cormorant Garamond', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --sd-font-ui:
+    'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --sd-font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --sd-fs-2xs: 10px;
+  --sd-fs-xs: 11px;
+  --sd-fs-sm: 12.5px;
+  --sd-fs-md: 14px;
+  --sd-fs-lg: 16px;
+  --sd-fs-xl: 20px;
+  --sd-fs-2xl: 28px;
+  --sd-fs-3xl: 38px;
+  --sd-track-caps: 0.16em;
+  --sd-track-wide: 0.3em;
+
+  /* ── space, shape, depth ───────────────────────────────────────────────────────────── */
+  --sd-s-1: 4px;
+  --sd-s-2: 8px;
+  --sd-s-3: 12px;
+  --sd-s-4: 16px;
+  --sd-s-5: 24px;
+  --sd-s-6: 32px;
+  --sd-s-7: 48px;
+  --sd-r-1: 2px;
+  --sd-r-2: 4px;
+  --sd-r-3: 10px;
+  --sd-r-round: 999px;
+  --sd-blur: 16px;
+  --sd-shadow-panel: 0 22px 54px -16px rgb(0 0 0 / 0.7), 0 2px 10px rgb(0 0 0 / 0.42);
+  --sd-shadow-pop: 0 34px 90px -24px rgb(0 0 0 / 0.85), 0 4px 16px rgb(0 0 0 / 0.5);
+  --sd-glow-accent: 0 0 16px rgb(220 181 111 / 0.32);
+  --sd-text-shadow: 0 0 10px rgb(3 5 10 / 0.9), 0 1px 2px rgb(3 5 10 / 0.9);
+
+  --sd-z-hud: 10;
+  --sd-z-panel: 20;
+  --sd-z-note: 30;
+  --sd-z-sheet: 40;
+  --sd-z-photo: 50;
+  --sd-z-modal: 60;
+  --sd-z-tooltip: 70;
+  --sd-z-toast: 80;
+  --sd-z-loading: 100;
+
+  /* ── motion ────────────────────────────────────────────────────────────────────────── */
+  --sd-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --sd-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --sd-dur-1: 150ms;
+  --sd-dur-2: 220ms;
+  --sd-dur-3: 320ms;
+
+  /* ── safe areas (notches, home indicators) ─────────────────────────────────────────── */
+  --sd-safe-t: env(safe-area-inset-top, 0px);
+  --sd-safe-r: env(safe-area-inset-right, 0px);
+  --sd-safe-b: env(safe-area-inset-bottom, 0px);
+  --sd-safe-l: env(safe-area-inset-left, 0px);
+}
+
+/* ═══════════════════════════════ the overlay root ═══════════════════════════════════════ */
+
+/*
+ * `container: sd / size` makes every responsive rule follow the overlay's own box instead of the
+ * window, so the dev page can preview the phone layout inside a narrow frame. main.tsx gives #app
+ * `pointer-events: none`; interactive surfaces opt back in below.
+ */
+.sd-root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  container: sd / size;
+  pointer-events: none;
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-fs-md);
+  line-height: 1.45;
+  color: var(--sd-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sd-root *,
+.sd-root *::before,
+.sd-root *::after {
+  box-sizing: border-box;
+}
+
+.sd-layout {
+  position: absolute;
+  inset: 0;
+  --sd-hit: 34px; /* minimum target size; 44px on touch */
+  --sd-inset: var(--sd-s-4); /* gutter to the viewport edge */
+  --sd-panel-w: 380px;
+}
+
+@media (pointer: coarse) {
+  .sd-layout {
+    --sd-hit: 44px;
+  }
+}
+
+@container sd (max-width: 1180px) {
+  .sd-layout {
+    --sd-panel-w: 344px;
+  }
+}
+
+@container sd (max-width: 720px) {
+  .sd-layout {
+    --sd-hit: 44px;
+    --sd-inset: 12px;
+    --sd-blur: 10px;
+  }
+}
+
+.sd-root button,
+.sd-root a,
+.sd-root input,
+.sd-root select,
+.sd-root textarea,
+.sd-root summary,
+.sd-root [role='slider'],
+.sd-root [data-sd-interactive] {
+  pointer-events: auto;
+}
+
+.sd-root button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.sd-root button:disabled {
+  cursor: default;
+}
+
+.sd-root :focus {
+  outline: none;
+}
+
+.sd-root :focus-visible {
+  outline: 1.5px solid var(--sd-focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px rgb(141 182 242 / 0.16);
+}
+
+.sd-root ::selection {
+  background: var(--sd-accent-dim);
+  color: var(--sd-text);
+}
+
+.sd-root {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sd-line-strong) transparent;
+}
+
+.sd-root ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.sd-root ::-webkit-scrollbar-thumb {
+  background: var(--sd-line-strong);
+  border-radius: var(--sd-r-round);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Reduced motion: honoured from the OS *and* from Settings (`data-motion="reduce"`). */
+@media (prefers-reduced-motion: reduce) {
+  .sd-root *,
+  .sd-root *::before,
+  .sd-root *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+.sd-root[data-motion='reduce'] *,
+.sd-root[data-motion='reduce'] *::before,
+.sd-root[data-motion='reduce'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* ═══════════════════════════════ primitives ═════════════════════════════════════════════ */
+
+/* Ink glass. Blur is the expensive part over a live canvas, so low quality drops it. */
+.sd-panel {
+  position: relative;
+  pointer-events: auto;
+  background: var(--sd-panel);
+  border: 1px solid var(--sd-line);
+  border-radius: var(--sd-r-2);
+  box-shadow:
+    var(--sd-shadow-panel),
+    inset 0 1px 0 rgb(255 255 255 / 0.04);
+  -webkit-backdrop-filter: blur(var(--sd-blur)) saturate(1.25);
+  backdrop-filter: blur(var(--sd-blur)) saturate(1.25);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .sd-panel {
+    background: var(--sd-panel-solid);
+  }
+}
+
+.sd-root[data-fx='low'] .sd-panel {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: var(--sd-panel-dense);
+}
+
+/* Atlas-plate corner brackets. */
+.sd-ticked::before,
+.sd-ticked::after {
+  content: '';
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border: 0 solid var(--sd-accent);
+  opacity: 0.85;
+  pointer-events: none;
+}
+.sd-ticked::before {
+  top: -1px;
+  left: -1px;
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+.sd-ticked::after {
+  right: -1px;
+  bottom: -1px;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+}
+
+/* Small tracked caps: labels, eyebrows, catalogue headings. */
+.sd-eyebrow {
+  margin: 0;
+  font: 500 var(--sd-fs-2xs) / 1.2 var(--sd-font-ui);
+  letter-spacing: var(--sd-track-caps);
+  text-transform: uppercase;
+  color: var(--sd-text-dim);
+}
+
+.sd-mono {
+  font-family: var(--sd-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'zero' 0;
+}
+
+/* Section heading: small-caps display face with a hairline that runs out to the count. */
+.sd-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-s-3);
+  margin: 0;
+  font: 600 15px / 1 var(--sd-font-display);
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.17em;
+  color: var(--sd-accent);
+}
+.sd-heading::after {
+  content: '';
+  order: 1;
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, var(--sd-line-strong), transparent);
+}
+.sd-heading > .sd-heading__count {
+  order: 2;
+  font: 400 var(--sd-fs-xs) / 1 var(--sd-font-mono);
+  letter-spacing: 0.04em;
+  font-variant-caps: normal;
+  color: var(--sd-text-dim);
+}
+
+/* A ruler: hairline base with minor ticks every 8px and a major tick every 40px. */
+.sd-rule {
+  height: 8px;
+  background:
+    linear-gradient(to right, var(--sd-line-strong) 0 1px, transparent 1px) 0 100% / 40px 8px
+      repeat-x,
+    linear-gradient(to right, var(--sd-line) 0 1px, transparent 1px) 0 100% / 8px 4px repeat-x,
+    linear-gradient(var(--sd-line), var(--sd-line)) 0 100% / 100% 1px no-repeat;
+  -webkit-mask-image: linear-gradient(to right, #000 55%, transparent);
+  mask-image: linear-gradient(to right, #000 55%, transparent);
+}
+
+.sd-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  font: 500 var(--sd-fs-2xs) / 1 var(--sd-font-mono);
+  color: var(--sd-text-dim);
+  border: 1px solid var(--sd-line-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--sd-r-2);
+  background: rgb(255 255 255 / 0.03);
+  white-space: nowrap;
+}
+
+/* Buttons ---------------------------------------------------------------------------------- */
+
+.sd-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sd-s-2);
+  min-height: var(--sd-hit);
+  padding: 0 var(--sd-s-4);
+  font: 500 var(--sd-fs-xs) / 1 var(--sd-font-ui);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--sd-text);
+  background: transparent;
+  border: 1px solid var(--sd-line-strong);
+  border-radius: var(--sd-r-2);
+  transition:
+    color var(--sd-dur-1) var(--sd-ease),
+    background-color var(--sd-dur-1) var(--sd-ease),
+    border-color var(--sd-dur-1) var(--sd-ease),
+    box-shadow var(--sd-dur-2) var(--sd-ease);
+}
+.sd-btn:hover:not(:disabled) {
+  color: var(--sd-accent-strong);
+  border-color: var(--sd-accent-dim);
+  background: var(--sd-accent-wash);
+}
+.sd-btn:active:not(:disabled) {
+  background: var(--sd-accent-dim);
+}
+.sd-btn:disabled {
+  opacity: 0.5;
+}
+.sd-btn--primary {
+  color: var(--sd-accent);
+  border-color: var(--sd-accent-dim);
+  background: var(--sd-accent-wash);
+}
+.sd-btn--primary:hover:not(:disabled) {
+  color: var(--sd-on-accent);
+  background: var(--sd-accent);
+  border-color: var(--sd-accent);
+  box-shadow: var(--sd-glow-accent);
+}
+.sd-btn--quiet {
+  border-color: transparent;
+  color: var(--sd-text-dim);
+}
+.sd-btn > svg {
+  flex: none;
+}
+
+.sd-iconbtn {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--sd-hit);
+  height: var(--sd-hit);
+  padding: 0;
+  color: var(--sd-text-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--sd-r-2);
+  transition:
+    color var(--sd-dur-1) var(--sd-ease),
+    background-color var(--sd-dur-1) var(--sd-ease),
+    border-color var(--sd-dur-1) var(--sd-ease);
+}
+.sd-iconbtn:hover:not(:disabled) {
+  color: var(--sd-text);
+  background: var(--sd-hover);
+  border-color: var(--sd-line);
+}
+.sd-iconbtn:active:not(:disabled) {
+  background: var(--sd-accent-wash);
+}
+.sd-iconbtn[aria-pressed='true'],
+.sd-iconbtn[aria-expanded='true'] {
+  color: var(--sd-accent);
+}
+.sd-iconbtn:disabled {
+  opacity: 0.4;
+}
+
+/* Chips and badges */
+.sd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px;
+  font: 500 var(--sd-fs-2xs) / 1.2 var(--sd-font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--sd-text-dim);
+  border: 1px solid var(--sd-line);
+  border-radius: var(--sd-r-1);
+  white-space: nowrap;
+}
+.sd-chip--gold {
+  color: var(--sd-accent);
+  border-color: var(--sd-accent-dim);
+  background: var(--sd-accent-wash);
+}
+.sd-chip--blue {
+  color: var(--sd-accent-2);
+  border-color: var(--sd-accent-2-dim);
+  background: var(--sd-accent-2-wash);
+}
+
+/* Entry animation shared by cards and sheets. */
+@keyframes sd-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes sd-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.sd-rise {
+  animation: sd-rise var(--sd-dur-3) var(--sd-ease) both;
+}
+
+.sd-visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

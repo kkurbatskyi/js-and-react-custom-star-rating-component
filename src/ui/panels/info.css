@@ -1,0 +1,474 @@
+/* Info panel: plate (desktop) / bottom sheet (phone), cards, rows. */
+
+.sd-info {
+  position: absolute;
+  z-index: var(--sd-z-panel);
+  top: calc(var(--sd-topbar-h) + 4px);
+  right: var(--sd-inset);
+  width: var(--sd-panel-w);
+  max-height: calc(100% - var(--sd-topbar-h) - var(--sd-inset) - 4px);
+  display: flex;
+  flex-direction: column;
+  animation: sd-slide-in var(--sd-dur-3) var(--sd-ease) both;
+}
+@keyframes sd-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sd-info__content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  animation: sd-rise var(--sd-dur-3) var(--sd-ease) both;
+}
+
+.sd-info__collapse {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+
+/* header ---------------------------------------------------------------------------------- */
+.sd-info__head {
+  position: relative;
+  flex: none;
+  padding: 18px 52px 14px 20px;
+  background: radial-gradient(
+    130% 120% at 100% 0%,
+    color-mix(in srgb, var(--sd-tint, var(--sd-accent)) 17%, transparent),
+    transparent 64%
+  );
+  border-radius: var(--sd-r-2) var(--sd-r-2) 0 0;
+}
+.sd-info__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-s-2);
+  min-width: 0;
+  color: var(--sd-text-dim);
+}
+.sd-info__eyebrow .sd-eyebrow {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.sd-info__cat {
+  margin-left: auto;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 10.5px / 1 var(--sd-font-mono);
+  letter-spacing: 0.03em;
+  color: var(--sd-text-faint);
+}
+.sd-info__name {
+  margin: 12px 0 3px;
+  font: 500 clamp(30px, 3.4vw, 38px) / 1.02 var(--sd-font-display);
+  letter-spacing: 0.005em;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sd-info__sub {
+  margin: 0;
+  font: italic 500 17px / 1.3 var(--sd-font-display);
+  color: var(--sd-text-dim);
+}
+
+/* rating plate ---------------------------------------------------------------------------- */
+.sd-info__fixed {
+  flex: none;
+  display: grid;
+  gap: var(--sd-s-3);
+  padding: 4px 20px 16px;
+}
+.sd-plate {
+  position: relative;
+  padding: 12px 8px 12px 14px;
+  border: 1px solid var(--sd-line-strong);
+  border-radius: var(--sd-r-2);
+  background:
+    linear-gradient(180deg, var(--sd-accent-wash), transparent 75%),
+    rgb(255 255 255 / 0.015);
+}
+.sd-plate__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sd-s-3);
+  padding-right: 6px;
+}
+.sd-plate__word {
+  font: italic 500 17px / 1 var(--sd-font-display);
+  color: var(--sd-text-faint);
+  transition: color var(--sd-dur-2) var(--sd-ease);
+}
+.sd-plate__word[data-set] {
+  color: var(--sd-accent);
+}
+.sd-plate__stars {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 9px;
+}
+.sd-plate__survey {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sd-s-3);
+  margin-top: 10px;
+  padding: 10px 6px 0 0;
+  border-top: 1px dotted var(--sd-line-strong);
+}
+.sd-plate__survey-label {
+  font-size: var(--sd-fs-sm);
+  color: var(--sd-text-dim);
+}
+.sd-info__actions {
+  display: flex;
+  gap: var(--sd-s-2);
+}
+.sd-info__actions > .sd-btn {
+  flex: 1;
+}
+.sd-info__actions > .sd-copy-manual {
+  flex: 1;
+}
+.sd-fly {
+  position: relative;
+  overflow: hidden;
+}
+.sd-fly__progress {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  background: var(--sd-accent);
+  transform-origin: 0 50%;
+}
+.sd-info__peek {
+  display: none;
+}
+
+/* scrolling body -------------------------------------------------------------------------- */
+.sd-info__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 20px 24px;
+  display: grid;
+  gap: 22px;
+  align-content: start;
+  border-top: 1px solid var(--sd-line);
+}
+.sd-block {
+  display: grid;
+  gap: var(--sd-s-3);
+}
+.sd-blurb {
+  margin: 0;
+  font: italic 500 18.5px / 1.42 var(--sd-font-display);
+  color: var(--sd-text);
+  text-wrap: pretty;
+}
+.sd-footnote {
+  margin: 0;
+  font-size: var(--sd-fs-xs);
+  line-height: 1.5;
+  color: var(--sd-text-faint);
+}
+.sd-empty {
+  margin: 0;
+  font: italic 500 16px / 1.4 var(--sd-font-display);
+  color: var(--sd-text-dim);
+}
+.sd-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sd-life {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-s-2);
+  margin: 0;
+  font-size: var(--sd-fs-sm);
+  color: var(--sd-text-dim);
+}
+.sd-life.is-alive {
+  color: var(--sd-success);
+}
+.sd-life__note {
+  color: var(--sd-text-dim);
+}
+
+/* list rows (planets, moons, results) ----------------------------------------------------- */
+.sd-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+.sd-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: var(--sd-s-3);
+  min-height: 46px;
+  padding: 6px 8px 6px 6px;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--sd-r-2);
+  transition:
+    background-color var(--sd-dur-1) var(--sd-ease),
+    border-color var(--sd-dur-1) var(--sd-ease);
+}
+.sd-row:hover,
+.sd-row[aria-selected='true'] {
+  background: var(--sd-hover);
+  border-color: var(--sd-line);
+}
+.sd-row__swatch {
+  flex: none;
+  justify-self: center;
+}
+.sd-row__main {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.sd-row__name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-weight: 500;
+  font-size: var(--sd-fs-md);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sd-row__glyph {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--sd-text-faint);
+  font-size: var(--sd-fs-2xs);
+  font-weight: 400;
+}
+.sd-row__meta {
+  font-size: var(--sd-fs-xs);
+  color: var(--sd-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sd-row__aside {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+}
+.sd-row__temp {
+  font-size: var(--sd-fs-xs);
+  color: var(--sd-text-dim);
+  white-space: nowrap;
+}
+.sd-row__badges {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 0;
+}
+.sd-row__badges .sd-chip {
+  padding: 1px 5px;
+  font-size: 9px;
+}
+.sd-row__life {
+  display: inline-flex;
+  color: var(--sd-success);
+}
+.sd-row__go {
+  color: var(--sd-text-faint);
+  transition: transform var(--sd-dur-1) var(--sd-ease);
+}
+.sd-row:hover .sd-row__go {
+  color: var(--sd-accent);
+  transform: translateX(2px);
+}
+
+/* galaxy card ----------------------------------------------------------------------------- */
+.sd-starts {
+  display: grid;
+  gap: var(--sd-s-2);
+}
+.sd-starts .sd-btn {
+  justify-content: flex-start;
+}
+.sd-tally {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--sd-line);
+  border-radius: var(--sd-r-2);
+}
+.sd-tally > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+.sd-tally > div + div {
+  border-left: 1px solid var(--sd-line);
+}
+.sd-tally dd {
+  margin: 0;
+  font-size: var(--sd-fs-xl);
+  color: var(--sd-accent);
+}
+.sd-info > .sd-info__scroll {
+  border-top: 0;
+}
+.sd-info__content > .sd-info__scroll {
+  border-top: 1px solid var(--sd-line);
+}
+
+/* collapsed tab (desktop) ----------------------------------------------------------------- */
+.sd-info-tab {
+  position: absolute;
+  z-index: var(--sd-z-panel);
+  top: calc(var(--sd-topbar-h) + 8px);
+  right: 0;
+  display: grid;
+  justify-items: center;
+  gap: var(--sd-s-2);
+  padding: 12px 6px;
+  color: var(--sd-text-dim);
+  border-right: 0;
+  border-radius: var(--sd-r-2) 0 0 var(--sd-r-2);
+  cursor: pointer;
+  transition: color var(--sd-dur-1) var(--sd-ease);
+}
+.sd-info-tab:hover {
+  color: var(--sd-accent);
+}
+.sd-info-tab span {
+  writing-mode: vertical-rl;
+  font: 500 var(--sd-fs-2xs) / 1 var(--sd-font-ui);
+  letter-spacing: var(--sd-track-caps);
+  text-transform: uppercase;
+}
+
+/* bottom sheet (phone) -------------------------------------------------------------------- */
+.sd-grip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 100%;
+  height: 26px;
+  padding: 0;
+  background: none;
+  border: 0;
+  touch-action: none;
+  cursor: grab;
+}
+.sd-grip span {
+  width: 38px;
+  height: 4px;
+  border-radius: var(--sd-r-round);
+  background: var(--sd-line-strong);
+}
+
+@container sd (max-width: 720px) {
+  .sd-info {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    max-height: none;
+    height: 56%;
+    padding-bottom: var(--sd-safe-b);
+    border-radius: var(--sd-r-3) var(--sd-r-3) 0 0;
+    border-bottom: 0;
+    z-index: var(--sd-z-sheet);
+    transition: height var(--sd-dur-3) var(--sd-ease);
+    animation-name: sd-sheet-in;
+  }
+  .sd-info.is-dragging {
+    transition: none;
+  }
+  .sd-info[data-sheet='peek'] {
+    height: calc(176px + var(--sd-safe-b));
+  }
+  .sd-info[data-sheet='full'] {
+    height: calc(100% - 76px);
+  }
+  .sd-info__head {
+    padding: 2px 56px 10px var(--sd-inset);
+    border-radius: var(--sd-r-3) var(--sd-r-3) 0 0;
+  }
+  .sd-info__collapse {
+    top: 12px;
+    right: 6px;
+  }
+  .sd-info__name {
+    font-size: 30px;
+    margin-top: 8px;
+  }
+  .sd-info__fixed {
+    padding: 4px var(--sd-inset) 14px;
+  }
+  .sd-info__scroll {
+    padding: 14px var(--sd-inset) calc(20px + var(--sd-safe-b));
+  }
+  .sd-info[data-sheet='peek'] .sd-info__fixed,
+  .sd-info[data-sheet='peek'] .sd-info__scroll,
+  .sd-info[data-sheet='peek'] .sd-info__sub {
+    display: none;
+  }
+  .sd-info[data-sheet='peek'] .sd-info__peek {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sd-s-3);
+    padding: 2px var(--sd-inset) 6px;
+  }
+  .sd-info[data-sheet='peek'] .sd-info__name {
+    margin-bottom: 8px;
+  }
+  .sd-info--galaxy .sd-info__scroll {
+    border-top: 0;
+  }
+}
+@keyframes sd-sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}

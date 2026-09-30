@@ -1,6 +1,6 @@
 /**
  * Entry point: a full-screen WebGL canvas behind the React overlay mounted in `#app`.
- * The 3D side is imperative (`boot`); React never re-renders per frame.
+ * The 3D side is imperative (`boot`, src/app); React never re-renders per frame.
  */
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -29,8 +29,9 @@ Object.assign(canvas.style, {
 document.body.prepend(canvas); // behind the overlay
 
 const appRoot = ensureElement('app', () => document.createElement('div'));
-// The overlay passes pointer events through to the canvas; interactive UI re-enables them.
-Object.assign(appRoot.style, { position: 'fixed', inset: '0', zIndex: '1', pointerEvents: 'none' });
+// Stacking: canvas (0) ▸ engine labels (1, see src/engine/labels) ▸ React UI (2). The overlay passes
+// pointer events through to the canvas; interactive UI re-enables them.
+Object.assign(appRoot.style, { position: 'fixed', inset: '0', zIndex: '2', pointerEvents: 'none' });
 
 createRoot(appRoot).render(
   <StrictMode>

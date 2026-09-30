@@ -57,7 +57,7 @@ const ARM_OUTER = 1.2;
 /** Dust lanes: offset towards the concave side and width, both × arm σ; interarm dust floor. */
 const DUST_LANE_OFFSET = 0.5;
 const DUST_LANE_WIDTH = 0.45;
-const DUST_FLOOR = 0.15;
+const DUST_FLOOR = 0.07;
 /** Star-count fraction of the stellar halo relative to the (thin + thick) disk. */
 const HALO_FRACTION = 0.015;
 /** Young-population baseline in the smooth thin disk (ongoing star formation between arms). */
@@ -96,6 +96,8 @@ export interface GalaxyStructure {
   young(x: number, y: number, z: number): number;
   /** Bulge + bar share of the local density, 0..1. */
   bulgeShare(x: number, y: number, z: number): number;
+  /** Light emissivity Σ_c ρ_c·L_c (unscaled density × `lightPerStar`; the sampler's weighting). */
+  light(x: number, y: number, z: number): number;
   /** Relative star counts per component (unscaled density × ly³). */
   readonly componentStars: Readonly<Record<GalaxyComponent, number>>;
   /** Light-weighted mixture probabilities used by `sample` (sum to 1). */
@@ -108,6 +110,77 @@ export interface GalaxyStructure {
   ): [number, number, number];
   /** Sample a position ∝ stellar light (component chosen by `componentWeights`). */
   sample(rng: Rng, out: [number, number, number]): [number, number, number];
+  /** Constants and tables for GPU ports of the fields (see `GalaxyGpuData`). */
+  readonly gpu: GalaxyGpuData;
+}
+
+/**
+ * Everything a GPU port of the fields needs. src/render/galaxy bakes `armFactor` and the midplane
+ * dust into a texture with exactly these formulas (README "Arms", "Dust") and evaluates the smooth
+ * components analytically. Densities are UNSCALED, like `GalaxyStructure.density`.
+ */
+export interface GalaxyGpuData {
+  readonly radiusLy: number;
+  readonly diskScaleLengthLy: number;
+  /** Width of the logistic disk edge (ly). */
+  readonly edgeWidthLy: number;
+  readonly thinHeightLy: number;
+  readonly thickHeightLy: number;
+  /** Thick-disk midplane density relative to the thin disk. */
+  readonly thickNorm: number;
+  readonly armHeightLy: number;
+  readonly dustHeightLy: number;
+  /** 0 when the galaxy has no arms. */
+  readonly armCount: number;
+  /** Rows in `wiggleLut` (max(1, armCount)). */
+  readonly armSlots: number;
+  readonly armStrength: number;
+  readonly armPhaseRad: number;
+  readonly armSpacingRad: number;
+  readonly cotPitch: number;
+  readonly sinPitch: number;
+  /** ln R₀ (arms start at R₀). */
+  readonly logRStart: number;
+  /** Arm envelope: smoothstep(envLo, envHi, R) · (1 − smoothstep(fadeStart, outer, R)). */
+  readonly envLoLy: number;
+  readonly envHiLy: number;
+  readonly armFadeStartLy: number;
+  readonly armOuterLy: number;
+  /** σ(R) = σ₀ (0.6 + 0.4 R / R_ref). */
+  readonly armSigma0Ly: number;
+  readonly armSigmaRefLy: number;
+  readonly armWiggle: number;
+  readonly flocculence: number;
+  /** Ridge wiggle w_k(u): `armSlots` rows of `wiggleStride` samples; f = (u − uMin)·scale ∈ [0, size). */
+  readonly wiggleLut: Float64Array;
+  readonly wiggleStride: number;
+  readonly wiggleSize: number;
+  readonly wiggleUMin: number;
+  readonly wiggleScale: number;
+  /** Noise grid, gridN² × 2 (arm amplitude, dust patchiness), row-major along z, nodes span ±gridHalfLy. */
+  readonly noiseGrid: Float32Array;
+  readonly gridN: number;
+  readonly gridHalfLy: number;
+  /** Dust radial profile: smoothstep(riseStart, inner, R) · e^(−(R − inner)/scale) above inner · taper. */
+  readonly dustRiseStartLy: number;
+  readonly dustInnerLy: number;
+  readonly dustScaleLy: number;
+  /** Dust is exactly 0 beyond this radius (end of the radial LUT). */
+  readonly dustMaxRadiusLy: number;
+  readonly dustLaneOffset: number;
+  readonly dustLaneWidth: number;
+  readonly dustFloor: number;
+  /** Plummer bulge ρ = bulge0 (1 + m²/a²)^−5/2 with m² = x² + z² + (y/q)². */
+  readonly bulge0: number;
+  readonly bulgeALy: number;
+  readonly bulgeQ: number;
+  /** Bar ρ = bar0 exp(−½(u²/σu² + v²/σv² + y²/σy²)), u along the bar angle (0 when unbarred). */
+  readonly bar0: number;
+  readonly barAngleRad: number;
+  readonly barSigmaULy: number;
+  readonly barSigmaVLy: number;
+  readonly barSigmaYLy: number;
+  readonly lightPerStar: Readonly<Record<GalaxyComponent, number>>;
 }
 
 // ───────────────────────────────────────────── Tables
@@ -191,9 +264,10 @@ const S_DUST = 1;
 const S_THIN = 2;
 const S_ARM = 3;
 const S_BULGE = 4;
+const S_HALO = 5;
 
 export function buildGalaxyStructure(shape: GalaxyShapeParams): GalaxyStructure {
-  const scratch = new Float64Array(5);
+  const scratch = new Float64Array(6);
   const rMax = shape.radiusLy;
   const rd = shape.diskScaleLengthLy;
   const hz = shape.diskScaleHeightLy;
@@ -513,6 +587,7 @@ export function buildGalaxyStructure(shape: GalaxyShapeParams): GalaxyStructure 
     scratch[S_THIN] = thin;
     scratch[S_ARM] = arm;
     scratch[S_BULGE] = bulgeBar;
+    scratch[S_HALO] = halo;
     return disk + arm + bulgeBar + halo;
   };
 
@@ -555,6 +630,19 @@ export function buildGalaxyStructure(shape: GalaxyShapeParams): GalaxyStructure 
     if (!(total > 0)) return 0;
     const v = (scratch[S_BULGE] as number) / total;
     return v > 1 ? 1 : v;
+  };
+
+  const light = (x: number, y: number, z: number): number => {
+    const total = evaluate(x, y, z);
+    const arm = scratch[S_ARM] as number;
+    const bulgeBar = scratch[S_BULGE] as number;
+    const halo = scratch[S_HALO] as number;
+    return (
+      (total - arm - bulgeBar - halo) * LIGHT_PER_STAR.disk +
+      arm * LIGHT_PER_STAR.arm +
+      bulgeBar * LIGHT_PER_STAR.bulge +
+      halo * LIGHT_PER_STAR.halo
+    );
   };
 
   // ── Sampling (constructive; the only loop is the bounded flocculence thinning of arm samples)
@@ -663,6 +751,57 @@ export function buildGalaxyStructure(shape: GalaxyShapeParams): GalaxyStructure 
     return sampleComponent(rng, GALAXY_COMPONENTS[i] as GalaxyComponent, out);
   };
 
+  const gpu: GalaxyGpuData = {
+    radiusLy: rMax,
+    diskScaleLengthLy: rd,
+    edgeWidthLy: EDGE_WIDTH * rMax,
+    thinHeightLy: hz,
+    thickHeightLy: hThick,
+    thickNorm: THICK_DISK_NORM,
+    armHeightLy: hArm,
+    dustHeightLy: shape.dustScaleHeightLy,
+    armCount: hasArms ? armCount : 0,
+    armSlots,
+    armStrength,
+    armPhaseRad: armPhase,
+    armSpacingRad: armSpacing,
+    cotPitch,
+    sinPitch,
+    logRStart,
+    envLoLy: envLo,
+    envHiLy: envHi,
+    armFadeStartLy: armFadeStart,
+    armOuterLy: armOuter,
+    armSigma0Ly: sigma0,
+    armSigmaRefLy: rRef,
+    armWiggle: ARM_WIGGLE,
+    flocculence: ARM_FLOCCULENCE,
+    wiggleLut,
+    wiggleStride,
+    wiggleSize: ARM_WIGGLE_LUT,
+    wiggleUMin: uMin,
+    wiggleScale,
+    noiseGrid: grid,
+    gridN,
+    gridHalfLy: gridHalf,
+    dustRiseStartLy: 0.4 * rStart,
+    dustInnerLy: dustInner,
+    dustScaleLy: 2.5 * rd,
+    dustMaxRadiusLy: radialMax,
+    dustLaneOffset: DUST_LANE_OFFSET,
+    dustLaneWidth: DUST_LANE_WIDTH,
+    dustFloor: DUST_FLOOR,
+    bulge0,
+    bulgeALy: bulgeA,
+    bulgeQ,
+    bar0,
+    barAngleRad: shape.barAngleRad,
+    barSigmaULy: barSu,
+    barSigmaVLy: barSv,
+    barSigmaYLy: barSy,
+    lightPerStar: LIGHT_PER_STAR,
+  };
+
   return {
     shape,
     density: evaluate,
@@ -671,10 +810,12 @@ export function buildGalaxyStructure(shape: GalaxyShapeParams): GalaxyStructure 
     dust,
     young,
     bulgeShare,
+    light,
     componentStars,
     componentWeights,
     sampleComponent,
     sample,
+    gpu,
   };
 }
 

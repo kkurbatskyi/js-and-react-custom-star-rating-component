@@ -1,0 +1,144 @@
+/*
+ * Where things sit. Desktop: top bar; info panel on the right; the chart (minimap) bottom-left with
+ * the scale ruler beside it and coordinates under the wordmark; the clock bottom-right of the free
+ * area. Phone: compact top bar, minimap and camera buttons tucked under it, readouts above a bottom
+ * sheet. Everything responds to the overlay's own size (`@container sd`), not the window.
+ */
+
+.sd-main {
+  display: contents;
+}
+
+.sd-slot {
+  position: absolute;
+  z-index: var(--sd-z-hud);
+  pointer-events: none;
+}
+.sd-slot > * {
+  pointer-events: auto;
+}
+
+/* Room the info panel takes on the right, when it is showing as a side plate. */
+.sd-layout {
+  --sd-right-inset: 0px;
+}
+.sd-layout[data-panel='open'] {
+  --sd-right-inset: calc(var(--sd-panel-w) + var(--sd-inset));
+}
+
+.sd-slot--map {
+  left: calc(var(--sd-inset) + var(--sd-safe-l));
+  bottom: calc(var(--sd-inset) + var(--sd-safe-b));
+}
+.sd-slot--scale {
+  left: calc(var(--sd-inset) + var(--sd-safe-l) + 178px + var(--sd-s-4));
+  bottom: calc(var(--sd-inset) + var(--sd-safe-b) + 6px);
+}
+.sd-slot--coords {
+  left: calc(var(--sd-inset) + var(--sd-safe-l) + 2px);
+  top: calc(var(--sd-topbar-h) + var(--sd-s-2));
+}
+.sd-slot--time {
+  right: calc(var(--sd-inset) + var(--sd-safe-r) + var(--sd-right-inset));
+  bottom: calc(var(--sd-inset) + var(--sd-safe-b));
+}
+.sd-slot--view {
+  left: calc(var(--sd-inset) + var(--sd-safe-l));
+  top: 50%;
+  transform: translateY(-50%);
+}
+.sd-slot--fps {
+  left: calc(var(--sd-inset) + var(--sd-safe-l) + 2px);
+  top: calc(var(--sd-topbar-h) + 118px);
+}
+
+/* Medium widths: tighter clock, and the ruler yields to the panel. */
+@container sd (max-width: 1180px) {
+  .sd-time__clock,
+  .sd-time__now-text {
+    display: none;
+  }
+  .sd-layout[data-panel='open'] .sd-slot--scale {
+    display: none;
+  }
+}
+
+/* Short windows (landscape phones, small laptops): drop the decorative instruments. */
+@container sd (max-height: 560px) {
+  .sd-slot--coords,
+  .sd-slot--fps {
+    display: none;
+  }
+  .sd-slot--view {
+    top: calc(var(--sd-topbar-h) + var(--sd-s-2));
+    transform: none;
+  }
+}
+@container sd (max-height: 430px) {
+  .sd-slot--map,
+  .sd-slot--scale {
+    display: none;
+  }
+}
+
+/* ── phone ─────────────────────────────────────────────────────────────────────────────── */
+@container sd (max-width: 720px) {
+  .sd-layout {
+    --sd-sheet-offset: 0px;
+  }
+  .sd-layout[data-sheet='peek'] {
+    --sd-sheet-offset: calc(176px + var(--sd-safe-b));
+  }
+  .sd-layout[data-sheet='half'],
+  .sd-layout[data-sheet='full'] {
+    --sd-sheet-offset: 0px;
+  }
+
+  .sd-slot--map {
+    top: calc(var(--sd-topbar-h) + var(--sd-s-2));
+    bottom: auto;
+  }
+  .sd-slot--map .sd-minimap {
+    --sd-map: 92px;
+  }
+  .sd-slot--map .sd-minimap__caption {
+    display: none;
+  }
+  .sd-slot--view {
+    top: calc(var(--sd-topbar-h) + var(--sd-s-2));
+    left: auto;
+    right: calc(var(--sd-inset) + var(--sd-safe-r));
+    transform: none;
+  }
+  .sd-slot--coords,
+  .sd-slot--fps {
+    display: none;
+  }
+  .sd-slot--fps {
+    display: block;
+    top: auto;
+    left: calc(var(--sd-inset) + var(--sd-safe-l));
+    bottom: calc(var(--sd-sheet-offset) + var(--sd-inset) + var(--sd-safe-b) + 70px);
+  }
+  .sd-slot--scale {
+    left: calc(var(--sd-inset) + var(--sd-safe-l) + 2px);
+    bottom: calc(var(--sd-sheet-offset) + var(--sd-inset) + var(--sd-safe-b) + 62px);
+  }
+  .sd-slot--time {
+    left: calc(var(--sd-inset) + var(--sd-safe-l));
+    right: calc(var(--sd-inset) + var(--sd-safe-r));
+    bottom: calc(var(--sd-sheet-offset) + var(--sd-inset) + var(--sd-safe-b) - 4px);
+  }
+  .sd-slot--time .sd-time {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .sd-layout[data-sheet='half'] .sd-slot--time,
+  .sd-layout[data-sheet='half'] .sd-slot--scale,
+  .sd-layout[data-sheet='full'] .sd-slot--time,
+  .sd-layout[data-sheet='full'] .sd-slot--scale,
+  .sd-layout[data-sheet='half'] .sd-slot--map,
+  .sd-layout[data-sheet='full'] .sd-slot--map {
+    display: none;
+  }
+}

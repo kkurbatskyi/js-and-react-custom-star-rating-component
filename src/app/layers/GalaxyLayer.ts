@@ -1,0 +1,137 @@
+/**
+ * GalaxyLayer (light-years) — the GalaxyVisual: the whole spiral from outside, the luminous band of
+ * the Milky-Way-like sky from inside the disk. Always active: it is the sky.
+ */
+import { type PerspectiveCamera, Scene, Vector3 } from 'three';
+import { smoothstep } from '../../core/math';
+import { KM_PER_LY } from '../../core/units';
+import type { FrameInfo, LabelSpec, Layer, LayerRenderSpec } from '../../engine/contracts';
+import { LabelTier } from '../../engine/contracts';
+import type {
+  GalaxyVisualOptions,
+  IGalaxyVisual,
+  Quality,
+  VisualFrame,
+} from '../../render/contracts';
+import { GalaxyVisual } from '../../render/galaxy/GalaxyVisual';
+import type { Universe } from '../../universe/contracts';
+import {
+  createVisualFrame,
+  type LayerContext,
+  projectRelative,
+  type ScreenPoint,
+  syncVisualFrame,
+} from './context';
+
+/** Galaxy particles closer than this fade out; the starfield resolves individual stars there. */
+const NEAR_FADE_LY = 1200;
+
+export class GalaxyLayer implements Layer {
+  readonly id = 'galaxy';
+  readonly scene = new Scene();
+  private visual: IGalaxyVisual;
+  private universe: Universe;
+  private readonly ctx: LayerContext;
+  private readonly options: GalaxyVisualOptions = {
+    cameraLy: new Vector3(),
+    nearFadeLy: NEAR_FADE_LY,
+    intensity: 1,
+  };
+  private readonly vframe: VisualFrame;
+  private readonly slice: LayerRenderSpec = { near: 1, far: 1e6 };
+  private readonly slices = [this.slice];
+  // Labels: the galactic core and "home".
+  private readonly labelSpecs: LabelSpec[] = [];
+  private readonly rel = new Vector3();
+  private readonly scratch = new Vector3();
+  private readonly screen: ScreenPoint = { x: 0, y: 0, depth: 0 };
+  private labelAlpha = 0;
+  private camera: PerspectiveCamera | null = null;
+  private width = 1;
+  private height = 1;
+
+  constructor(ctx: LayerContext, quality: Quality) {
+    this.ctx = ctx;
+    this.universe = ctx.universe();
+    this.visual = new GalaxyVisual(this.universe.galaxy, quality);
+    this.scene.add(this.visual.object);
+    this.vframe = createVisualFrame(ctx.engine.renderer, quality);
+  }
+
+  update(frame: FrameInfo, camera: PerspectiveCamera): LayerRenderSpec[] {
+    const universe = this.ctx.universe();
+    if (universe !== this.universe) this.rebuild(universe, frame.quality);
+    const g = frame.cam.galacticLy;
+    this.options.cameraLy.copy(g);
+    const radius = this.universe.galaxy.params.radiusLy;
+    this.slice.near = 0.3 * NEAR_FADE_LY;
+    this.slice.far = g.length() + 2 * radius;
+    camera.near = this.slice.near;
+    camera.far = this.slice.far;
+    camera.updateProjectionMatrix();
+
+    this.visual.update(syncVisualFrame(this.vframe, frame, camera), this.options);
+
+    // Galaxy-scale labels fade in once the camera is well outside the disk's neighbourhood.
+    this.labelAlpha = smoothstep(4000, 12000, frame.cam.focusDistanceKm / KM_PER_LY);
+    this.camera = camera;
+    this.width = frame.width;
+    this.height = frame.height;
+    return this.slices;
+  }
+
+  labels(out: LabelSpec[]): void {
+    if (this.labelAlpha < 0.5 || !this.camera || !this.ctx.labelsEnabled()) return;
+    const u = this.universe;
+    this.pushLabel(out, 0, 'core', 'Galactic core', u.galaxy.params.name, [0, 0, 0], 999);
+    const home = u.getRecord(u.homeStarId());
+    if (home) this.pushLabel(out, 1, home.id, home.name, 'You are here', home.posLy, 998);
+  }
+
+  private pushLabel(
+    out: LabelSpec[],
+    slot: number,
+    key: string,
+    text: string,
+    sub: string,
+    posLy: readonly [number, number, number],
+    rank: number,
+  ): void {
+    const g = this.options.cameraLy;
+    this.rel.set(posLy[0] - g.x, posLy[1] - g.y, posLy[2] - g.z);
+    if (!projectRelative(this.rel, this.camera as PerspectiveCamera, this.width, this.height, this.scratch, this.screen))
+      return;
+    let spec = this.labelSpecs[slot];
+    if (!spec) {
+      spec = { key, text, x: 0, y: 0, priority: 0 };
+      this.labelSpecs[slot] = spec;
+    }
+    spec.key = `galaxy:${key}`;
+    spec.text = text;
+    spec.sub = sub;
+    spec.x = this.screen.x;
+    spec.y = this.screen.y;
+    spec.priority = LabelTier.galaxyFeature * 1000 + rank;
+    spec.marker = slot === 1 ? 'ring' : null;
+    spec.color = slot === 1 ? 'var(--sd-accent, #d9b36c)' : undefined;
+    spec.ref = slot === 1 ? { kind: 'star', id: key } : undefined;
+    out.push(spec);
+  }
+
+  setQuality(q: Quality): void {
+    this.visual.setQuality?.(q);
+  }
+
+  private rebuild(universe: Universe, quality: Quality): void {
+    this.scene.remove(this.visual.object);
+    this.visual.dispose();
+    this.universe = universe;
+    this.visual = new GalaxyVisual(universe.galaxy, quality);
+    this.scene.add(this.visual.object);
+  }
+
+  dispose(): void {
+    this.scene.remove(this.visual.object);
+    this.visual.dispose();
+  }
+}

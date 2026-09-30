@@ -1,193 +1,232 @@
 /**
- * GalaxyVisual — STUB (integration phase). The galaxy specialist replaces the internals; the
- * public API (`IGalaxyVisual`) stays.
+ * GalaxyVisual — the galaxy as the sky: a volumetric emission–absorption pass for the diffuse
+ * light and dust, plus flux-calibrated particles for star clouds, blue clusters and pink HII
+ * knots. See ./README.md for the technique.
  *
- * One additive `THREE.Points` cloud sampled from `GalaxyModel.samplePosition` (∝ stellar light).
- * Each particle is a soft Gaussian "star cloud" of fixed WORLD size, so surface brightness is
- * distance-independent like real extended sources; sub-pixel sprites are clamped to ~1.5 px and
- * dimmed by the area ratio to conserve flux. Colour = population blackbody (old bulge ≈ 4200 K →
- * disk ≈ 5600 K → young arms ≈ 14 000 K) with a 1.3× saturation boost, a sprinkle of pink HII
- * knots in the arms, and dust dimming (exp(−k·dust)) that carves dark lanes.
+ *  - ./GalaxyMap.ts       planar map (arm factor, dust, star formation, filaments), baked on the GPU
+ *  - ./GalaxyVolume.ts    reduced-resolution raymarch + temporal resolve + additive composite
+ *  - ./GalaxyParticles.ts particles with line-of-sight dust extinction and a near fade
+ *  - ./calibration.ts     brightness/dust normalisation, so every seed looks alike
  *
- * Camera-relative: the object sits at −cameraLy each frame (float64 on the CPU); particle
- * positions stay galaxy-centred float32. Particles closer than `nearFadeLy` fade out.
+ * Camera-relative: the camera sits at the origin; `cameraLy` (galactic, float64 on the CPU) is
+ * handed to the shaders, and the particle object is offset by −cameraLy.
  */
-import {
-  AdditiveBlending,
-  BufferAttribute,
-  BufferGeometry,
-  GLSL3,
-  Points,
-  ShaderMaterial,
-  Uniform,
-} from 'three';
-import { blackbodyRGBInto } from '../../core/color';
-import { createRng } from '../../core/rng';
+import { type Data3DTexture, Group } from 'three';
 import type { GalaxyModel } from '../../core/types';
+import {
+  type GalaxyStructure,
+  getGalaxyStructure,
+  HOME_RADIUS_FRACTION,
+} from '../../gen/galaxy/structure';
 import type { GalaxyVisualOptions, IGalaxyVisual, Quality, VisualFrame } from '../contracts';
+import { type GalaxyCalibration, calibrate, populationColorInto } from './calibration';
+import { GalaxyMap } from './GalaxyMap';
+import { GalaxyParticles } from './GalaxyParticles';
+import { GalaxyVolume } from './GalaxyVolume';
+import { createNoiseTexture } from './noiseVolume';
+import { DEFAULT_PARTICLE_OPTIONS, type ParticleOptions } from './particles';
+import {
+  defaultGalaxyLook,
+  GALAXY_QUALITY,
+  type GalaxyLook,
+  type GalaxyQualityProfile,
+} from './settings';
+import { createFieldUniforms, type GalaxyFieldUniforms, setFieldMap } from './uniforms';
 
-/** Particle budget per quality (stub values; ARCHITECTURE §8 lists the final budgets). */
-const PARTICLES: Readonly<Record<Quality, number>> = {
-  low: 60_000,
-  medium: 100_000,
-  high: 150_000,
-  ultra: 200_000,
-};
-/** Brightness and size are normalised to this count, so every quality looks alike. */
-const REFERENCE_COUNT = 150_000;
-/** Largest sprite, CSS px (GPUs cap gl_PointSize; huge sprites also cost fill rate). */
-const MAX_SPRITE_PX = 160;
-
-const vertexShader = /* glsl */ `
-uniform float uPixelsPerRadian;
-uniform float uNearFade;
-uniform float uIntensity;
-uniform float uMaxPointPx;
-
-in vec3 aColor;
-in float aSize;
-
-out vec3 vColor;
-
-void main() {
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  gl_Position = projectionMatrix * mv;
-  float dist = length(mv.xyz);
-  float fade = smoothstep(0.35 * uNearFade, uNearFade, dist);
-  // World size → device pixels (distance, not depth, so sprites don't swell at the screen edge).
-  float px = aSize * uPixelsPerRadian / max(dist, 1e-3);
-  float drawPx = clamp(px, 1.5, uMaxPointPx);
-  // Conserve flux for sub-pixel sprites; never brighten clamped close-ups.
-  float area = min(1.0, (px * px) / (drawPx * drawPx));
-  vColor = aColor * (uIntensity * fade * area);
-  gl_PointSize = drawPx;
-  if (fade <= 0.0 || uIntensity <= 0.0) gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // cull
-}
-`;
-
-const fragmentShader = /* glsl */ `
-in vec3 vColor;
-out vec4 fragColor;
-
-void main() {
-  vec2 d = gl_PointCoord * 2.0 - 1.0;
-  float r2 = dot(d, d);
-  if (r2 > 1.0) discard;
-  fragColor = vec4(vColor * exp(-4.0 * r2), 1.0);
-}
-`;
-
-/** Pink Hα of HII regions (linear sRGB). */
-const HII: readonly [number, number, number] = [1, 0.32, 0.5];
-
-function buildGeometry(model: GalaxyModel, count: number): BufferGeometry {
-  const rng = createRng(model.params.seed).fork('galaxy-visual-stub');
-  const positions = new Float32Array(count * 3);
-  const colors = new Float32Array(count * 3);
-  const sizes = new Float32Array(count);
-  const p: [number, number, number] = [0, 0, 0];
-  // Fewer particles → proportionally bigger, same radiance: total flux n·s² stays constant.
-  const sizeScale = Math.sqrt(REFERENCE_COUNT / count);
-  for (let i = 0; i < count; i++) {
-    model.samplePosition(rng, p);
-    const [x, y, z] = p;
-    positions[i * 3] = x;
-    positions[i * 3 + 1] = y;
-    positions[i * 3 + 2] = z;
-
-    const bulge = model.bulgeFraction(x, y, z);
-    const young = model.youngFraction(x, y, z);
-    const dust = model.dustDensity(x, y, z);
-    const o = i * 3;
-    let size = rng.range(700, 1800);
-    let brightness = rng.range(0.5, 1.1);
-    if (young > 0.35 && rng.chance(0.03 * young)) {
-      // HII knot: small, bright, pink.
-      colors[o] = HII[0];
-      colors[o + 1] = HII[1];
-      colors[o + 2] = HII[2];
-      size = rng.range(160, 320);
-      brightness = 14;
-    } else {
-      const disk = 5600 + (4200 - 5600) * bulge;
-      blackbodyRGBInto(disk + (14_000 - disk) * young * young, colors, o);
-      // Blackbody colours are pale: boost chroma about the luminance axis (ARCHITECTURE §9).
-      const lum = 0.2126 * colors[o] + 0.7152 * colors[o + 1] + 0.0722 * colors[o + 2];
-      for (let c = 0; c < 3; c++) colors[o + c] = Math.max(0, lum + (colors[o + c] - lum) * 1.3);
-      if (rng.chance(0.04)) {
-        // Compact star clouds give the disk some grain.
-        size *= 0.2;
-        brightness *= 12;
-      }
-    }
-    brightness *= Math.exp(-2.2 * dust); // dust lanes
-    const k = 0.011 * brightness;
-    colors[o] *= k;
-    colors[o + 1] *= k;
-    colors[o + 2] *= k;
-    sizes[i] = size * sizeScale;
-  }
-  const geometry = new BufferGeometry();
-  geometry.setAttribute('position', new BufferAttribute(positions, 3));
-  geometry.setAttribute('aColor', new BufferAttribute(colors, 3));
-  geometry.setAttribute('aSize', new BufferAttribute(sizes, 1));
-  return geometry;
-}
+/** Pink Hα of diffuse ionised gas (linear sRGB, unit luminance applied below). */
+const HII_GLOW: readonly [number, number, number] = [1, 0.3, 0.46];
+const NOISE_SIZE = 64;
+/** Near-camera dust structure fades over this distance (ly). */
+const NEAR_DUST_RANGE_LY = 2500;
 
 export class GalaxyVisual implements IGalaxyVisual {
-  readonly object: Points<BufferGeometry, ShaderMaterial>;
-  private readonly model: GalaxyModel;
+  readonly object = new Group();
+  /** Artistic controls, read every frame (a dev GUI may bind to it). */
+  readonly look: GalaxyLook = defaultGalaxyLook();
+  readonly structure: GalaxyStructure;
+
   private quality: Quality;
-  private readonly uniforms = {
-    uPixelsPerRadian: new Uniform(1000),
-    uNearFade: new Uniform(0),
-    uIntensity: new Uniform(1),
-    uMaxPointPx: new Uniform(MAX_SPRITE_PX),
-  };
+  private profile: GalaxyQualityProfile;
+  private map: GalaxyMap;
+  private readonly fields: GalaxyFieldUniforms;
+  private readonly noise: Data3DTexture;
+  private readonly volume: GalaxyVolume;
+  private readonly particles: GalaxyParticles;
+  private calibration: GalaxyCalibration | null = null;
+  private calibratedFor = { brightness: Number.NaN, dustOpacity: Number.NaN, dustHeight: Number.NaN };
+  private readonly rgb = [0, 0, 0];
 
   constructor(model: GalaxyModel, quality: Quality) {
-    this.model = model;
+    this.structure = getGalaxyStructure(model.params);
     this.quality = quality;
-    const material = new ShaderMaterial({
-      glslVersion: GLSL3,
-      vertexShader,
-      fragmentShader,
-      uniforms: this.uniforms,
-      blending: AdditiveBlending,
-      transparent: true,
-      depthWrite: false,
-      depthTest: false,
-      toneMapped: false,
-    });
-    this.object = new Points(buildGeometry(model, PARTICLES[quality]), material);
+    this.profile = GALAXY_QUALITY[quality];
+    this.fields = createFieldUniforms(this.structure);
+    this.map = new GalaxyMap(this.structure, this.profile.mapSize);
+    this.noise = createNoiseTexture(NOISE_SIZE, this.structure.shape.seed);
+    this.volume = new GalaxyVolume(
+      this.fields,
+      this.noise,
+      this.profile.volumeScale,
+      this.profile.volumeSteps,
+    );
+    this.particles = new GalaxyParticles(
+      this.structure,
+      this.fields,
+      this.profile.particles,
+      this.particleOptions(),
+    );
     this.object.name = 'GalaxyVisual';
-    this.object.frustumCulled = false; // the camera usually sits inside the cloud
+    this.object.add(this.volume.mesh, this.particles.object);
+    this.configureVolume();
   }
 
   setQuality(q: Quality): void {
-    if (PARTICLES[q] === PARTICLES[this.quality]) {
-      this.quality = q;
-      return;
+    if (q === this.quality) return;
+    const next = GALAXY_QUALITY[q];
+    if (next.particles !== this.profile.particles) {
+      this.particles.rebuild(next.particles, this.particleOptions());
+    }
+    if (next.mapSize !== this.profile.mapSize) {
+      this.map.dispose();
+      this.map = new GalaxyMap(this.structure, next.mapSize);
+      this.fields.uGalMap.value = null;
     }
     this.quality = q;
-    const old = this.object.geometry;
-    this.object.geometry = buildGeometry(this.model, PARTICLES[q]);
-    old.dispose();
+    this.profile = next;
+    this.volume.scale = next.volumeScale;
+    this.volume.steps = next.volumeSteps;
+    this.volume.resetHistory();
+  }
+
+  /** Regenerate the particles (after changing colour temperatures or saturation in `look`). */
+  rebuildParticles(): void {
+    this.particles.rebuild(this.profile.particles, this.particleOptions());
+  }
+
+  /** Dev check of the GPU map bake against the CPU model (see GalaxyMap.validate). */
+  validateMap(frame: VisualFrame): { arm: number; dust: number } | null {
+    return this.map.ready ? this.map.validate(frame.renderer) : null;
+  }
+
+  /** Dev: the volume pass's HDR radiance and distance (kly) at screen uv (see GalaxyVolume). */
+  probeVolume(frame: VisualFrame, u: number, v: number): [number, number, number, number] {
+    return this.volume.probe(frame.renderer, u, v);
   }
 
   update(frame: VisualFrame, o: GalaxyVisualOptions): void {
-    this.object.position.set(-o.cameraLy.x, -o.cameraLy.y, -o.cameraLy.z);
-    const fovY = (frame.camera.fov * Math.PI) / 180;
-    const u = this.uniforms;
-    u.uPixelsPerRadian.value = (frame.height * frame.pixelRatio) / (2 * Math.tan(fovY / 2));
-    u.uMaxPointPx.value = MAX_SPRITE_PX * frame.pixelRatio;
-    u.uNearFade.value = o.nearFadeLy;
-    u.uIntensity.value = o.intensity;
-    this.object.visible = o.intensity > 0;
+    const visible = o.intensity > 0;
+    this.object.visible = visible;
+    if (!visible) return;
+    if (!this.map.ready) {
+      this.map.bake(frame.renderer);
+      setFieldMap(this.fields, this.structure, this.map.target.texture, this.map.size);
+    }
+    const cal = this.syncLook();
+
+    const p = this.particles.uniforms;
+    p.uNearFade.value = o.nearFadeLy;
+    p.uEmission.value = cal.emission * o.intensity;
+    p.uLosSamples.value = this.profile.losSamples;
+    this.particles.update(frame, o.cameraLy);
+    this.volume.render(frame, o.cameraLy, o.intensity, o.nearFadeLy);
   }
 
   dispose(): void {
-    this.object.geometry.dispose();
-    this.object.material.dispose();
+    this.map.dispose();
+    this.volume.dispose();
+    this.particles.dispose();
+    this.noise.dispose();
+  }
+
+  private particleOptions(): ParticleOptions {
+    const l = this.look;
+    return {
+      ...DEFAULT_PARTICLE_OPTIONS,
+      bulgeK: l.bulgeK,
+      diskK: l.diskK,
+      thickK: l.thickK,
+      youngK: l.youngK,
+      saturation: l.saturation,
+      kneeLight: this.calibrate().ridgeLight * l.coreKnee,
+      kneeGamma: l.coreGamma,
+    };
+  }
+
+  /** Calibration for the current look (recomputed only when its inputs change, ~1 ms). */
+  private calibrate(): GalaxyCalibration {
+    const l = this.look;
+    const dustHeight = this.structure.gpu.dustHeightLy * l.dustThickness;
+    const f = this.calibratedFor;
+    if (
+      !this.calibration ||
+      f.brightness !== l.brightness ||
+      f.dustOpacity !== l.dustOpacity ||
+      f.dustHeight !== dustHeight
+    ) {
+      this.calibration = calibrate(this.structure, l.brightness, l.dustOpacity, dustHeight);
+      this.calibratedFor = { brightness: l.brightness, dustOpacity: l.dustOpacity, dustHeight };
+    }
+    return this.calibration;
+  }
+
+  /** Bounds and step constants of the raymarch (fixed per galaxy). */
+  private configureVolume(): void {
+    const g = this.structure.gpu;
+    const u = this.volume.uniforms;
+    u.uBoundR.value = 1.25 * g.radiusLy;
+    u.uBoundY.value = Math.max(
+      3.2 * g.thickHeightLy,
+      5 * g.bulgeALy * g.bulgeQ,
+      4 * g.thinHeightLy,
+    );
+    u.uStepK.value.set(0.3, 0.12, 0.16, g.dustHeightLy); // w: rendered dust height (syncLook)
+    u.uStepLimits.value.set(25, 6000, 1500);
+  }
+
+  /** Push `look` into the uniforms (recalibrating when its photometric inputs changed). */
+  private syncLook(): GalaxyCalibration {
+    const l = this.look;
+    const cal = this.calibrate();
+    const g = this.structure.gpu;
+    const share = DEFAULT_PARTICLE_OPTIONS.share;
+    const L = g.lightPerStar;
+    const rgb = this.rgb;
+    const u = this.volume.uniforms;
+    const setColor = (
+      target: { set(x: number, y: number, z: number): unknown },
+      tempK: number,
+      k: number,
+    ): void => {
+      populationColorInto(tempK, l.saturation, rgb);
+      target.set((rgb[0] ?? 0) * k, (rgb[1] ?? 0) * k, (rgb[2] ?? 0) * k);
+    };
+    const kE = cal.emission;
+    setColor(u.uColThin.value, l.diskK, kE * L.disk * (1 - share.disk));
+    setColor(u.uColThinInner.value, l.bulgeK + 500, kE * L.disk * (1 - share.disk));
+    setColor(u.uColThick.value, l.thickK, kE * L.disk * (1 - share.disk));
+    setColor(u.uColArm.value, l.youngK, kE * L.arm * (1 - share.arm));
+    setColor(u.uColSpheroid.value, l.bulgeK, kE * L.bulge * (1 - share.bulge));
+    const hiiLum = 0.2126 * HII_GLOW[0] + 0.7152 * HII_GLOW[1] + 0.0722 * HII_GLOW[2];
+    const hii = (kE * L.arm * g.armStrength * l.hiiGlow) / hiiLum;
+    u.uColHii.value.set(HII_GLOW[0] * hii, HII_GLOW[1] * hii, HII_GLOW[2] * hii);
+    u.uMottle.value = l.mottling;
+    u.uLight.value.set(L.disk, L.arm, L.bulge, 0.8 * HOME_RADIUS_FRACTION * g.radiusLy);
+    u.uKnee.value.set(cal.ridgeLight * l.coreKnee, l.coreGamma);
+    const dustHeight = g.dustHeightLy * l.dustThickness;
+    u.uStepK.value.w = dustHeight;
+    this.fields.uGalInvHDust.value = 1 / dustHeight;
+    u.uNear.value.x = l.nearDust;
+    u.uNear.value.y = NEAR_DUST_RANGE_LY;
+
+    this.fields.uGalDustDetail.value = l.dustDetail;
+    this.fields.uGalExtinction.value
+      .set(l.reddening[0], l.reddening[1], l.reddening[2])
+      .multiplyScalar(cal.dustKappa);
+
+    const p = this.particles.uniforms;
+    p.uKindGain.value.set(l.particleGain, l.particleGain * l.clusterGain, l.particleGain * l.hiiGain);
+    p.uMinSigmaPx.value = l.minSigmaPx;
+    p.uMaxSigmaPx.value = l.maxSigmaPx;
+    return cal;
   }
 }
