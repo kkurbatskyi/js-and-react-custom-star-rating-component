@@ -11,7 +11,6 @@ import {
   BackSide,
   Color,
   GLSL3,
-  Matrix4,
   Mesh,
   NormalBlending,
   ShaderMaterial,
@@ -79,7 +78,6 @@ export class CloudLayer implements ICloudLayer {
       uCamQ: new Uniform(this.camQ),
       uSun: new Uniform(this.sunQ),
       uSunRad: new Uniform(new Color(1, 1, 1)),
-      uProj: new Uniform(new Matrix4()),
       uColor: new Uniform(new Color(...params.color)),
       uSunTau: new Uniform(new Vector3(...params.sunTau)),
       uSky: new Uniform(new Color(...params.skyColor)),
@@ -134,7 +132,6 @@ export class CloudLayer implements ICloudLayer {
       u.sunColor.g * u.sunIntensity,
       u.sunColor.b * u.sunIntensity,
     );
-    this.u.uProj.value.copy(frame.camera.projectionMatrix);
     this.u.uLook.value.y = u.intensity;
     if (this.epoch === null) this.epoch = frame.simDays;
     const days = frame.simDays - this.epoch;

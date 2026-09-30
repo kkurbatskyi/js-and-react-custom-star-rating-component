@@ -39,7 +39,7 @@ uniform vec4 uGeom;        // x: cloud sphere radius, y: planet radius, z: 1 - o
 uniform vec3 uCamQ;
 uniform vec3 uSun;         // sphere space
 uniform vec3 uSunRad;
-uniform mat4 uProj;
+uniform mat4 projectionMatrix;   // three.js sets it per render call (each depth slice has its own near/far)
 uniform vec3 uColor;
 uniform vec3 uSunTau;
 uniform vec3 uSky;
@@ -122,7 +122,7 @@ void main() {
   float lam = 0.99 * (tHit + camDist) * length(vec3(d.x, d.y * uGeom.z, d.z));
   float depth = 0.0;
   if (lam > 1e-3) {
-    vec4 c = uProj * vec4(normalize(vView) * lam, 1.0);
+    vec4 c = projectionMatrix * vec4(normalize(vView) * lam, 1.0);
     depth = clamp(c.z / c.w * 0.5 + 0.5, 0.0, 1.0);
   }
   gl_FragDepth = depth;

@@ -51,7 +51,7 @@ uniform vec4 uPhase;       // mie g, multiple-scattering blend (rayleigh, mie)
 uniform int uSamples;
 uniform float uPass;
 uniform float uIntensity;
-uniform mat4 uProj;
+uniform mat4 projectionMatrix;   // three.js sets it per render call (each depth slice has its own near/far)
 
 in vec3 vQ;
 in vec3 vView;
@@ -125,7 +125,7 @@ vec3 march(vec3 p0, vec3 d, float t0, float t1, float jit, bool scatter, out vec
     float u0 = float(k) / cnt;
     float u1 = float(k + 1) / cnt;
     float len = sideA ? la : lb;
-    float uj = mix(u0, u1, jit);
+    float uj = mix(u0, u1, 0.5 + 0.3 * (jit - 0.5));   // near-midpoint: a full stratified jitter shows as a dot lattice
     float dt = len * (u1 * u1 - u0 * u0);       // quadratic spacing: dense next to the lowest point
     float dist = len * uj * uj;
     vec3 p = p0 + d * (sideA ? ts - dist : ts + dist);
@@ -174,7 +174,7 @@ void main() {
   float lam = 0.99 * (t0 + camDist) * length(vec3(d.x, d.y * uGeom.w, d.z));
   float depth = 0.0;
   if (lam > 1e-3) {
-    vec4 c = uProj * vec4(normalize(vView) * lam, 1.0);
+    vec4 c = projectionMatrix * vec4(normalize(vView) * lam, 1.0);
     depth = clamp(c.z / c.w * 0.5 + 0.5, 0.0, 1.0);
   }
   gl_FragDepth = depth;

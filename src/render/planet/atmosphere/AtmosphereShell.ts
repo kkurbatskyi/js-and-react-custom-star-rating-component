@@ -12,7 +12,6 @@ import {
   CustomBlending,
   GLSL3,
   Group,
-  Matrix4,
   Mesh,
   OneFactor,
   ShaderMaterial,
@@ -84,7 +83,6 @@ export class AtmosphereShell implements IAtmosphereShell {
       uPhase: new Uniform(new Vector4(mie.g, params.multiScatter, params.multiScatter * 0.5, 0)),
       uSamples: new Uniform(SAMPLES[quality]),
       uIntensity: new Uniform(1),
-      uProj: new Uniform(new Matrix4()),
     };
 
     const seg = SEGMENTS[quality];
@@ -129,7 +127,7 @@ export class AtmosphereShell implements IAtmosphereShell {
     this.u.uSamples.value = SAMPLES[q];
   }
 
-  update(frame: VisualFrame, u: PlanetUniforms): void {
+  update(_frame: VisualFrame, u: PlanetUniforms): void {
     this.object.visible = u.intensity > 0.001;
     if (!this.object.visible) return;
     const f = this.frame;
@@ -140,7 +138,6 @@ export class AtmosphereShell implements IAtmosphereShell {
     this.u.uSunE.value.set(u.sunColor.r * k, u.sunColor.g * k, u.sunColor.b * k);
     this.u.uSunAng.value = Math.max(u.sunAngularRadiusRad, 1e-4);
     this.u.uIntensity.value = u.intensity;
-    this.u.uProj.value.copy(frame.camera.projectionMatrix);
   }
 
   dispose(): void {
