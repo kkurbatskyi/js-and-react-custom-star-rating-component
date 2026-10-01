@@ -9,7 +9,7 @@
  * add up to a white ring. Each rock is dimmed by 1/(1 + crowd), where crowd ≈ rocks per pixel, so a
  * dense band saturates at a soft dusty level while a sparse one stays a scatter of individual points.
  */
-export const beltVertexShader = /* glsl */ `
+const beltVertexShader = /* glsl */ `
 uniform float uDt;        // days since the epoch (NOT raw simDays)
 uniform float uKappa;     // ω = κ·a^−1.5, rad/day
 uniform vec3 uCamS;       // camera in frame S (lighting only)
@@ -59,7 +59,7 @@ void main() {
 
 #ifdef DUST
   float px = clamp(2.0 * aLook.x * uFocalPx / depth, 2.0, 64.0);
-  gl_PointSize = px * uPixelRatio;
+  gl_PointSize = px; // already device px
   float cover = min(1.0, (16.0 / px) * (16.0 / px)) * (1.0 - smoothstep(36.0, 64.0, px));
   float k = aLook.y * cover * lit * dim / (1.0 + 0.35 * uCrowd);
   vSphere = 0.0;
@@ -75,7 +75,7 @@ void main() {
 }
 `;
 
-export const beltFragmentShader = /* glsl */ `
+const beltFragmentShader = /* glsl */ `
 in vec3 vColor;
 in float vSphere;
 in vec3 vLight;
@@ -95,3 +95,9 @@ void main() {
 #endif
 }
 `;
+
+/** Both programs share one source; the DUST define selects the soft-sprite variant. */
+export const asteroidBeltShaders = {
+  vertex: beltVertexShader,
+  fragment: beltFragmentShader,
+} as const;
